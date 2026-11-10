@@ -1031,6 +1031,22 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .inl.ro{cursor:default}
 .inl.ro:hover{background:transparent;box-shadow:none}
 .wbr-val.ro,.wbr-goal.ro{cursor:default;opacity:.85}
+.cu-sum{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.cu-stats{display:flex;gap:8px;flex-wrap:wrap}
+.cu-stat{background:#f2f6fa;border:1px solid var(--line);border-radius:8px;padding:6px 12px;min-width:74px;text-align:center}
+.cu-stat .n{font-weight:800;font-size:18px;color:var(--ink);font-variant-numeric:tabular-nums}
+.cu-stat .l{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.cu-msg{background:#f2f6fa;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--ink)}
+.cu-msg.bad b{color:var(--red);display:block;margin-bottom:6px}
+.cu-grp{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.cu-grp-h{display:flex;align-items:center;gap:8px;width:100%;background:#eef2f6;border:0;padding:8px 10px;cursor:pointer;text-align:left;color:var(--ink)}
+.cu-n{margin-left:auto;background:var(--deep);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700}
+.cu-body{padding:8px 12px 10px;max-height:320px;overflow:auto}
+.cu-row{font-size:12.5px;line-height:1.5;padding:4px 0;border-bottom:1px solid #f0f3f6;overflow-wrap:anywhere;color:var(--ink)}
+.cu-row:last-child{border-bottom:0}
+.cu-name{font-weight:700}
+.cu-ch{display:inline-block;margin:0 10px 0 0;color:var(--ink-2)}
+.cu-ch b{font-weight:700;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -1080,7 +1096,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-10-1615';
+const BUILD='2026-11-10-1835';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2391,7 +2407,7 @@ function StoreProvider({children}){
 
   const resetSeed = useCallback(()=>{ importData(freshSeed()); },[importData]);
 
-  const value = { mode,user,state,comp,compAccess,newBuild,idleWarn,me,setMe,sync,toast,flash, signIn,signOut, writeEntity,writeMany,deleteEntity,writeMeta,writeHcSettings,writeWbrSettings,importData,resetSeed, cfg };
+  const value = { mode,user,state,comp,compAccess,newBuild,idleWarn,me,setMe,sync,toast,flash, signIn,signOut, writeEntity,writeMany,deleteEntity,writeMeta,writeHcSettings,writeWbrSettings,importData,resetSeed, cfg, syncGrantsNow:(p)=>syncGrants(p) };
   return React.createElement(Store.Provider,{value}, children);
 }
 /* ============================================================
@@ -5469,10 +5485,10 @@ function Scoreboard(){
 /* ============================================================
    Activity - the full change log, filterable by person
    ============================================================ */
-const ACT_VERB={created:'created',updated:'updated',completed:'completed',uncompleted:'reopened',deleted:'deleted',commented:'commented on',replied:'replied on',comment_edited:'edited a comment on',comment_deleted:'deleted a comment on',resolved:'resolved a thread on',reopened:'reopened a thread on'};
-const ACT_TYPE_LABEL={project:'project',task:'task',objective:'objective',person:'teammate',metric:'metric',permission_set:'the permission set',access:'access for',policy:'the permission policy:'};
+const ACT_VERB={created:'created',updated:'updated',completed:'completed',uncompleted:'reopened',deleted:'deleted',commented:'commented on',replied:'replied on',comment_edited:'edited a comment on',comment_deleted:'deleted a comment on',resolved:'resolved a thread on',reopened:'reopened a thread on',imported:'applied'};
+const ACT_TYPE_LABEL={project:'project',task:'task',objective:'objective',person:'teammate',metric:'metric',permission_set:'the permission set',access:'access for',policy:'the permission policy:',import:'an update file:'};
 const ACT_VERB_EXTRA={reset:'reset'};
-const ACT_GROUPS={edits:['created','updated','completed','uncompleted','deleted'],comments:['commented','replied','comment_edited','comment_deleted','resolved','reopened'],admin:['reassigned','bulk']};
+const ACT_GROUPS={edits:['created','updated','completed','uncompleted','deleted'],comments:['commented','replied','comment_edited','comment_deleted','resolved','reopened'],admin:['reassigned','bulk','imported']};
 function ActivityView(){
   const g=useGtm(); const {activity, maps, people}=g; const nav=useNav();
   const [who,setWho]=useState('all'); const [act,setAct]=useState('all'); const [q,setQ]=useState(''); const [cap,setCap]=useState(150);
@@ -11533,6 +11549,390 @@ function HcModalHost({modal,onClose,onOpen}){
 }
 
 
+/* ============================================================
+   UPDATE FROM FILE  (cirri-update v1)
+   ------------------------------------------------------------
+   The weekly refresh. A file carries any of: orgs, people, metrics, readings, plan.
+   Whatever the file does not mention is left exactly as it is - this is a merge,
+   never a restore. cuPlan is pure: it reads the workspace and the file and returns
+   every change it would make, so the preview shows the truth before anything is
+   written. The apply step then goes through the same actions a person uses by hand
+   (promote, transfer, depart, edit), so history, the activity log and the pay split
+   behave identically.
+   Matching: people by work email, then by employeeId; orgs by name; metrics by id,
+   then by name within the section, then by a name that is unique; readings by the
+   deterministic entry id, so running the same file twice changes nothing.
+   ============================================================ */
+const CU_FMT={num:'num',number:'num',count:'num',cur:'cur',currency:'cur',money:'cur',pct:'pct',percent:'pct',days:'days',day:'days',hrs:'hrs',hours:'hrs',sec:'sec',seconds:'sec',mo:'mo',months:'mo',score:'score',ratio:'ratio'};
+const CU_DIR={up:'up',higher:'up',down:'down',lower:'down',target:'target'};
+const CU_AGG={cum:'cum',cumulative:'cum',sum:'cum',snap:'snap',rate:'snap',average:'snap',snapshot:'snap',level:'snap'};
+const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','ote','onLeave','status','exitDate','attritionType','exitReason','slackId','teamTags','cost'];
+function cuLc(s){ return String(s==null?'':s).trim().toLowerCase(); }
+function cuHas(o,k){ return o && Object.prototype.hasOwnProperty.call(o,k) && o[k]!==undefined; }
+function cuSame(a,b){ return JSON.stringify(a==null?'':a)===JSON.stringify(b==null?'':b); }
+function cuIsoDate(s){ const t=String(s||'').trim().slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(t)? t : ''; }
+function cuNum(v){ if(v==null||v==='') return null; if(typeof v==='number') return isFinite(v)? v : null; return wbrParseVal(v); }
+
+/* ctx: {employees (with pay merged), leaders, levels, metrics, entries, periods, wbrS, canComp, today, currency} */
+function cuPlan(file, ctx){
+  const R={errors:[], warnings:[], asOf:'', source:'',
+    orgs:{add:[], change:[]}, people:{hires:[], moves:[], departs:[], edits:[], missing:[], same:0},
+    sections:{add:[]}, metrics:{add:[], change:[]}, readings:{add:[], change:[], same:0, skipped:[]}, plan:{cells:[]},
+    metricOut:{}, sectionsOut:null, empAfter:[]};
+  if(!file || typeof file!=='object' || file.format!=='cirri-update'){ R.errors.push('This is not a Cirri update file. The file must say "format": "cirri-update".'); return R; }
+  if(file.version && Number(file.version)!==1) R.warnings.push('File version '+file.version+' - this build reads version 1.');
+  R.asOf=cuIsoDate(file.asOf)||ctx.today; R.source=String(file.source||'').slice(0,200);
+  const emps=(ctx.employees||[]).slice(); const leaders=(ctx.leaders||[]).slice();
+  const levels=ctx.levels||[];
+
+  /* ---- 1. who is who: existing records, plus new people with ids assigned now so managers and org leads can point at them ---- */
+  const byEmail={}, byExt={}; emps.forEach(e=>{ if(e.email) byEmail[cuLc(e.email)]=e; if(e.extId) byExt[String(e.extId)]=e; });
+  const rows=Array.isArray(file.people)? file.people : [];
+  const seenEmail={};
+  const matched=[]; // {row, prev|null, id}
+  rows.forEach((row,i)=>{
+    const where='People row '+(i+1)+(row&&row.name?' ('+row.name+')':'');
+    if(!row || typeof row!=='object'){ R.errors.push(where+': not an object.'); return; }
+    Object.keys(row).forEach(k=>{ if(CU_PEOPLE_KEYS.indexOf(k)<0) R.warnings.push(where+': unknown field "'+k+'" ignored.'); });
+    const em=cuLc(row.email);
+    if(!em && !row.employeeId){ R.errors.push(where+': needs an email (or an employeeId for someone already on the roster).'); return; }
+    if(em && seenEmail[em]){ R.errors.push(where+': '+em+' appears twice in the file. Only the first row is used.'); return; }
+    if(em) seenEmail[em]=1;
+    let prev=(em&&byEmail[em]) || (row.employeeId!=null&&byExt[String(row.employeeId)]) || null;
+    if(!prev && em && row.name){ // a record from before emails were filled in: match a unique name with no email
+      const c=emps.filter(e=>!e.email && cuLc(e.name)===cuLc(row.name)); if(c.length===1){ prev=c[0]; R.warnings.push(where+': matched to the existing record by name; the email will be written onto it.'); } }
+    matched.push({row, prev, id: prev? prev.id : uid('e'), where});
+  });
+  const fileByEmail={}; matched.forEach(m=>{ const em=cuLc(m.row.email)||cuLc(m.prev&&m.prev.email); if(em) fileByEmail[em]=m; });
+  const nameOfId={}; emps.forEach(e=>{ nameOfId[e.id]=e.name; }); matched.forEach(m=>{ if(m.row.name) nameOfId[m.id]=String(m.row.name).trim(); else if(m.prev) nameOfId[m.id]=m.prev.name; });
+  const personRef=(ref)=>{ // email, employeeId or a unique name -> {id,name}
+    const r=String(ref==null?'':ref).trim(); if(!r) return {id:'',name:''};
+    const lc=r.toLowerCase();
+    if(fileByEmail[lc]) return {id:fileByEmail[lc].id, name:nameOfId[fileByEmail[lc].id]||''};
+    if(byEmail[lc]) return {id:byEmail[lc].id, name:byEmail[lc].name};
+    if(byExt[r]) return {id:byExt[r].id, name:byExt[r].name};
+    const all=emps.map(e=>({id:e.id,name:e.name})).concat(matched.filter(m=>!m.prev).map(m=>({id:m.id,name:nameOfId[m.id]||''})));
+    const hit=all.filter(p=>cuLc(p.name)===lc); return hit.length===1? hit[0] : null;
+  };
+
+  /* ---- 2. orgs ---- */
+  const orgByName={}; leaders.forEach(l=>{ orgByName[cuLc(l.label)]=l; orgByName[cuLc(l.id)]=l; });
+  (Array.isArray(file.orgs)?file.orgs:[]).forEach((o,i)=>{
+    const nm=String((o&&o.name)||'').trim(); if(!nm){ R.errors.push('Org row '+(i+1)+': needs a name.'); return; }
+    let lead=''; if(cuHas(o,'lead')){ const p=personRef(o.lead); if(p&&p.id) lead=p.name; else R.warnings.push('Org '+nm+': lead "'+o.lead+'" is not on the roster or in this file.'); }
+    const prev=orgByName[cuLc(nm)];
+    if(!prev){ let id=hcSlug(nm)||'org'; let n=2; while(leaders.some(l=>l.id===id)) id=hcSlug(nm)+'-'+(n++);
+      const rec={id,label:nm,kev:lead}; leaders.push(rec); orgByName[cuLc(nm)]=rec; R.orgs.add.push(rec); }
+    else if(cuHas(o,'lead') && lead && lead!==(prev.kev||'')){ const rec=Object.assign({},prev,{kev:lead}); R.orgs.change.push({prev, next:rec, changes:[{k:'lead',from:prev.kev||'none',to:lead}]}); }
+  });
+  const orgRef=(ref)=>{ const l=orgByName[cuLc(ref)]; return l? l.id : null; };
+
+  /* ---- 3. people ---- */
+  const levelOf=(v)=>{ if(v==null||v==='') return null; if(typeof v==='number'||/^\d+$/.test(String(v).trim())){ const n=parseInt(v,10); return (!levels.length||levels.some(l=>Number(l.n)===n))? n : null; }
+    const l=levels.find(x=>cuLc(x.name)===cuLc(v)); return l? Number(l.n) : null; };
+  const blank={leaderId:'',name:'',title:'',ote:null,country:'USA',role:'',level:2,manager:'',managerId:'',teamTags:[],startDate:'',performance:'Good',attrition:'',onLeave:false,notes:'',status:'active',email:'',slackId:'',c1:'CAC',w1:100,t1:'',ch1:'',c2:'',w2:0,t2:'',ch2:'',c3:'',w3:0,t3:'',ch3:''};
+  const after={}; emps.forEach(e=>{ after[e.id]=e; });
+  matched.forEach(m=>{
+    const row=m.row, prev=m.prev, w=m.where;
+    const patch={};
+    if(cuLc(row.email)) patch.email=cuLc(row.email);
+    if(cuHas(row,'employeeId')) patch.extId=String(row.employeeId);
+    ['name','title','role','country','slackId','exitReason','attritionType'].forEach(k=>{ if(cuHas(row,k)) patch[k]=String(row[k]==null?'':row[k]).trim(); });
+    if(cuHas(row,'currency')) patch.currency=String(row.currency||'').trim().toUpperCase()||ctx.currency||'USD';
+    if(cuHas(row,'startDate')){ const d=cuIsoDate(row.startDate); if(d||!row.startDate) patch.startDate=d; else R.warnings.push(w+': startDate "'+row.startDate+'" is not YYYY-MM-DD; left as it was.'); }
+    if(cuHas(row,'exitDate')){ const d=cuIsoDate(row.exitDate); if(d) patch.exitDate=d; }
+    if(cuHas(row,'level')){ const n=levelOf(row.level); if(n!=null) patch.level=n; else R.warnings.push(w+': level "'+row.level+'" is not on the ladder in Settings > People; level left as it was.'); }
+    if(cuHas(row,'org')){ const id=orgRef(row.org); if(id){ patch.leaderId=id; } else R.warnings.push(w+': org "'+row.org+'" does not exist and is not in the file\u2019s orgs; org left as it was.'); }
+    if(cuHas(row,'manager')){ if(!String(row.manager||'').trim()){ patch.managerId=''; patch.manager=''; }
+      else { const p=personRef(row.manager); if(p&&p.id&&p.id!==m.id){ patch.managerId=p.id; patch.manager=p.name; } else R.warnings.push(w+': manager "'+row.manager+'" is not on the roster or in this file; manager left as it was.'); } }
+    if(cuHas(row,'onLeave')) patch.onLeave=!!row.onLeave;
+    if(cuHas(row,'teamTags')) patch.teamTags=Array.isArray(row.teamTags)? row.teamTags.map(String).slice(0,3) : [];
+    if(cuHas(row,'ote')){ if(!ctx.canComp) R.warnings.push(w+': pay skipped - your permission set does not include this person\u2019s pay.'); else { const v=cuNum(row.ote); if(v!=null) patch.ote=v; else if(row.ote!==null) R.warnings.push(w+': ote "'+row.ote+'" is not a number; pay left as it was.'); } }
+    if(cuHas(row,'cost')){ const c=Array.isArray(row.cost)? row.cost.slice(0,3) : []; const tot=c.reduce((a,x)=>a+(Number(x&&x.pct)||0),0);
+      if(!c.length || Math.round(tot)!==100) R.warnings.push(w+': cost allocation must add up to 100% across at most three lines; left as it was.');
+      else [1,2,3].forEach(i=>{ const x=c[i-1]||{}; patch['c'+i]=x.bucket||''; patch['w'+i]=Number(x.pct)||0; patch['t'+i]=x.tag||''; patch['ch'+i]=(x.bucket==='CAC')?(x.channel||''):''; }); }
+    let status=null; if(cuHas(row,'status')){ const s=cuLc(row.status); if(s==='active'||s==='departed') status=s; else if(s==='on leave'||s==='leave'){ status='active'; patch.onLeave=true; } else R.warnings.push(w+': status "'+row.status+'" should be active or departed; left as it was.'); }
+
+    if(!prev){
+      if(!patch.name){ R.errors.push(w+': a new person needs a name.'); return; }
+      if(!patch.leaderId){ R.errors.push(w+': a new person needs an org that exists or is listed in the file\u2019s orgs.'); return; }
+      const rec=Object.assign({}, blank, {currency:ctx.currency||'USD'}, patch, {id:m.id, status:status||'active'});
+      if(rec.status==='departed'){ rec.exitDate=rec.exitDate||R.asOf; rec.departedAt=nowISO(); }
+      after[m.id]=rec; R.people.hires.push({next:rec}); return;
+    }
+    const next=Object.assign({}, prev, patch);
+    if(status) next.status=status;
+    const keys=Object.keys(patch).concat(status?['status']:[]);
+    const changes=keys.filter((k,i,a)=>a.indexOf(k)===i && !cuSame(prev[k], next[k]) && k!=='manager');
+    if(!changes.length){ R.people.same++; after[prev.id]=next; return; }
+    after[prev.id]=next;
+    const was=hcStatus(prev), now=hcStatus(next);
+    const item={prev, next, changes};
+    if(was==='active' && now==='departed'){ item.exit={attritionType:next.attritionType||'', exitDate:next.exitDate||R.asOf, reason:next.exitReason||''}; R.people.departs.push(item); }
+    else if(now==='active' && (Number(next.level)||0)>(Number(prev.level)||0)) { item.kind='promotion'; R.people.moves.push(item); }
+    else if(now==='active' && (prev.leaderId!==next.leaderId || (prev.managerId||'')!==(next.managerId||''))) { item.kind='transfer'; R.people.moves.push(item); }
+    else R.people.edits.push(item);
+  });
+  /* rosterScope names the orgs this file lists completely (or "all"). Active people in them who are
+     not in the file are flagged, never removed. A file without it makes no claim about who is missing. */
+  const scope={}; let scopeAll=false;
+  const rs=file.rosterScope;
+  if(rs==='all') scopeAll=true;
+  else if(Array.isArray(rs)) rs.forEach(n=>{ const id=orgRef(n); if(id) scope[id]=1; else R.warnings.push('rosterScope: org "'+n+'" does not exist.'); });
+  else if(rs!=null) R.warnings.push('rosterScope should be "all" or a list of org names; ignored.');
+  emps.forEach(e=>{ if(hcStatus(e)!=='active' || e.aboveRoster || !(scopeAll || scope[e.leaderId])) return;
+    if(!matched.some(m=>m.prev&&m.prev.id===e.id)) R.people.missing.push(e); });
+  R.empAfter=Object.keys(after).map(k=>after[k]);
+
+  /* ---- 4. Business Review: sections and metrics ---- */
+  const S=ctx.wbrS; const secs=(S.sections||[]).slice();
+  const secRef=(ref, create)=>{ const t=String(ref==null?'':ref).trim(); if(!t) return null;
+    const s=secs.find(x=>cuLc(x.id)===cuLc(t)||cuLc(x.label)===cuLc(t)); if(s) return s.id;
+    if(!create) return null;
+    let id=hcSlug(t)||'section'; let n=2; while(secs.some(x=>x.id===id)) id=hcSlug(t)+'-'+(n++);
+    const org=leaders.find(l=>cuLc(l.label)===cuLc(t));
+    const rec={id,label:t,hcLeaderId:org?org.id:''}; secs.push(rec); R.sections.add.push(rec); return id; };
+  const mets=(ctx.metrics||[]).filter(m=>!m.archived);
+  const out=R.metricOut; // id -> final metric object (only metrics this file touches)
+  const cur=(m)=> out[m.id] || m;
+  const metricRef=(ref, secHint)=>{
+    if(ref==null) return null; const t=String(ref).trim(); if(!t) return null;
+    const pool=mets.concat(R.metrics.add.map(a=>a.next));
+    const byId=pool.find(m=>m.id===t); if(byId) return cur(byId);
+    const sid=secHint? secRef(secHint,false) : null;
+    if(sid){ const a=pool.filter(m=>m.sec===sid && cuLc(m.name)===cuLc(t)); if(a.length===1) return cur(a[0]); }
+    const b=pool.filter(m=>cuLc(m.name)===cuLc(t)); return b.length===1? cur(b[0]) : (b.length>1? 'ambiguous' : null);
+  };
+  (Array.isArray(file.metrics)?file.metrics:[]).forEach((x,i)=>{
+    const w='Metric row '+(i+1)+(x&&x.name?' ('+x.name+')':'');
+    if(!x || !(x.id||x.name)){ R.errors.push(w+': needs an id or a name.'); return; }
+    const found=metricRef(x.id||x.name, x.section);
+    if(found==='ambiguous'){ R.errors.push(w+': more than one metric is called "'+x.name+'". Give its section or its id.'); return; }
+    const patch={};
+    if(cuHas(x,'name')&&found) patch.name=String(x.name).trim();
+    if(cuHas(x,'section')){ const sid=secRef(x.section,true); if(sid) patch.sec=sid; }
+    if(cuHas(x,'def')) patch.def=String(x.def||'');
+    if(cuHas(x,'fmt')){ const v=CU_FMT[cuLc(x.fmt)]; if(v) patch.fmt=v; else R.warnings.push(w+': unit "'+x.fmt+'" not recognised (use number, currency, percent, days, hours, seconds, months, score or ratio).'); }
+    if(cuHas(x,'cad')){ const v=String(x.cad).toUpperCase(); if(WBR_CAD[v]) patch.cad=v; else R.warnings.push(w+': window "'+x.cad+'" not recognised (use '+WBR_CAD_ORDER.join(', ')+').'); }
+    if(cuHas(x,'agg')){ const v=CU_AGG[cuLc(x.agg)]; if(v) patch.agg=v; else R.warnings.push(w+': aggregation "'+x.agg+'" not recognised (use cumulative or rate).'); }
+    if(cuHas(x,'dir')){ const v=CU_DIR[cuLc(x.dir)]; if(v) patch.dir=v; else R.warnings.push(w+': direction "'+x.dir+'" not recognised (use up, down or target).'); }
+    if(cuHas(x,'band')){ const v=cuNum(x.band); if(v!=null) patch.band=v; }
+    if(cuHas(x,'goal')) patch.goalDefault=cuNum(x.goal);
+    if(cuHas(x,'owner')){ const p=personRef(x.owner); if(p&&p.id){ patch.ownerId=p.id; patch.ownerName=p.name; } else R.warnings.push(w+': owner "'+x.owner+'" is not on the roster or in this file.'); }
+    if(cuHas(x,'hideReview')) patch.hideWbr=!!x.hideReview;
+    if(cuHas(x,'hidePlan')) patch.hidePlan=!!x.hidePlan;
+    if(!found){
+      if(!patch.sec){ R.errors.push(w+': a new metric needs a section.'); return; }
+      const base=wbrBlankMetric(patch.sec);
+      const rec=Object.assign(base, patch, {id: x.id? String(x.id) : uid('wm'), name:String(x.name||x.id).trim()});
+      out[rec.id]=rec; R.metrics.add.push({next:rec}); return;
+    }
+    const next=Object.assign({}, found, patch);
+    const changes=Object.keys(patch).filter(k=>!cuSame(found[k],next[k]) && k!=='ownerName');
+    if(changes.length){ out[found.id]=next; R.metrics.change.push({prev:found, next, changes}); }
+  });
+  R.sectionsOut=R.sections.add.length? secs : null;
+
+  /* ---- 5. readings ---- */
+  const entryMap={}; (ctx.entries||[]).forEach(e=>{ entryMap[e.id]=e; });
+  const periodCache={};
+  const weekOf=(pk, ref)=>{ const P=periodCache[pk]||(periodCache[pk]=wbrPeriodOf(ctx.periods||[], pk, S)); const t=String(ref||'').trim().toLowerCase();
+    return (P.weeks||[]).find(x=>x.id===t) || (cuIsoDate(t)? (P.weeks||[]).find(x=>x.date===cuIsoDate(t)) : null) || null; };
+  const seenEntry={};
+  (Array.isArray(file.readings)?file.readings:[]).forEach((r,i)=>{
+    const w='Reading row '+(i+1);
+    const m=metricRef(r&&r.metric, r&&r.section);
+    if(m==='ambiguous'){ R.errors.push(w+': more than one metric is called "'+r.metric+'". Give its section or its id.'); return; }
+    if(!m){ R.readings.skipped.push({row:r, why:'no metric called "'+(r&&r.metric)+'"'}); return; }
+    if(wbrIsComputed(m)){ R.readings.skipped.push({row:r, why:m.name+' is worked out by a formula, never typed'}); return; }
+    const date=cuIsoDate(r.date); const pk=(r.month&&/^\d{4}-\d{2}$/.test(String(r.month)))? String(r.month) : (date? date.slice(0,7) : '');
+    if(!pk){ R.errors.push(w+' ('+m.name+'): needs a month (YYYY-MM) or a date.'); return; }
+    const wk=weekOf(pk, r.week||date);
+    if(!wk){ const P=periodCache[pk]; R.errors.push(w+' ('+m.name+'): '+(r.week||date||'no week')+' is not a checkpoint in '+wbrMonthLabel(pk)+'. Checkpoints: '+(P?(P.weeks||[]).map(x=>x.id+' '+x.date).join(', '):'none')+'.'); return; }
+    const id=WBR_ENTRY_ID(m.id,pk,wk.id);
+    if(seenEntry[id]){ R.warnings.push(w+' ('+m.name+' '+wk.label+'): appears twice; the later row wins.'); }
+    const v=cuNum(r.value); const raw=(typeof r.value==='string')? r.value.trim() : '';
+    if(v==null && r.value!=null && r.value!==''){ R.errors.push(w+' ('+m.name+'): value "'+r.value+'" is not a number.'); return; }
+    if(v==null) { R.readings.skipped.push({row:r, why:'no value'}); return; }
+    const prevE=entryMap[id];
+    const next=Object.assign({}, prevE||{id, mid:m.id, pk, wk:wk.id, v:null, raw:'', note:''}, {id, mid:m.id, pk, wk:wk.id, v, raw, updatedAt:nowISO()});
+    if(cuHas(r,'note')) next.note=String(r.note||'');
+    const row={metric:m, pk, wk, prev:prevE||null, next};
+    const target= (prevE && String(prevE.v)===String(v) && (!cuHas(r,'note')||String(prevE.note||'')===next.note))? null : (prevE? R.readings.change : R.readings.add);
+    if(seenEntry[id]){ ['add','change'].forEach(k=>{ R.readings[k]=R.readings[k].filter(x=>x.next.id!==id); }); }
+    seenEntry[id]=1;
+    if(target) target.push(row); else R.readings.same++;
+  });
+
+  /* ---- 6. plan (the finance model numbers, month by month) ---- */
+  (Array.isArray(file.plan)?file.plan:[]).forEach((p,i)=>{
+    const w='Plan row '+(i+1);
+    const m=metricRef(p&&p.metric, p&&p.section);
+    if(m==='ambiguous'){ R.errors.push(w+': more than one metric is called "'+p.metric+'". Give its section or its id.'); return; }
+    if(!m){ R.errors.push(w+': no metric called "'+(p&&p.metric)+'".'); return; }
+    const pk=String((p&&p.month)||''); if(!/^\d{4}-\d{2}$/.test(pk)){ R.errors.push(w+' ('+m.name+'): month must be YYYY-MM.'); return; }
+    const v=cuNum(p.value); if(v==null && p.value!==null){ R.errors.push(w+' ('+m.name+'): value "'+p.value+'" is not a number.'); return; }
+    const base=cur(m); const was=(base.plan||{})[pk];
+    if(cuSame(was==null?null:was, v)) return;
+    const plan=Object.assign({}, base.plan||{}); if(v==null) delete plan[pk]; else plan[pk]=v;
+    out[m.id]=Object.assign({}, base, {plan});
+    R.plan.cells.push({metric:m, pk, from:was==null?null:was, to:v});
+  });
+  return R;
+}
+function cuCounts(R){
+  const p=R.people;
+  return {people:p.hires.length+p.moves.length+p.departs.length+p.edits.length, orgs:R.orgs.add.length+R.orgs.change.length,
+    metrics:R.metrics.add.length+R.metrics.change.length+R.sections.add.length, readings:R.readings.add.length+R.readings.change.length, plan:R.plan.cells.length};
+}
+function cuNothing(R){ const c=cuCounts(R); return !c.people&&!c.orgs&&!c.metrics&&!c.readings&&!c.plan; }
+/* What a file should look like, filled with this workspace's own names so whoever builds it can match them. */
+function cuTemplate(st, emps, leaders, S){
+  const lbl={}; leaders.forEach(l=>{ lbl[l.id]=l.label; });
+  const secLbl={}; (S.sections||[]).forEach(s=>{ secLbl[s.id]=s.label; });
+  const mk=wbrMonthKey(todayStr());
+  return {
+    format:'cirri-update', version:1, asOf:todayStr(), rosterScope:[], source:'Describe where this came from, e.g. Rippling export + Dora, week of '+todayStr(),
+    _help:{
+      rule:'Merge, never replace. Leave a field out and it stays as it is. Leave a section out and nothing in it changes.',
+      people:'Matched by work email (then employeeId). New email = new hire. Higher level = promotion; new org or manager = transfer; status departed = departure.',
+      rosterScope:'Optional. The orgs this file lists completely, or "all". Active people in those orgs who are missing from the file are flagged for review, never removed.',
+      people_fields:CU_PEOPLE_KEYS.join(', ')+'. level: a number or a ladder name. manager: an email. org: an org name. ote: annual, in the person\u2019s currency. cost: up to three {bucket, pct, tag, channel} adding to 100.',
+      metrics:'Create or change a metric. Matched by id, then name within section. fmt: number|currency|percent|days|hours|seconds|months|score|ratio. cad: '+WBR_CAD_ORDER.join('|')+'. agg: cumulative|rate. dir: up|down|target. band: % tolerance. goal: standing goal. owner: email.',
+      readings:'One value per metric per checkpoint. month YYYY-MM plus week (w1, w2... or eom), or a date equal to a checkpoint date. Percent metrics are 0-100. Seconds are seconds.',
+      plan:'The finance model number for a metric in a month: {metric, month, value}. value null clears it.',
+      checkpoints_this_month:(wbrPeriodOf(st.wbr_periods||[], mk, S).weeks||[]).map(w=>w.id+' = '+w.date)
+    },
+    orgs:leaders.map(l=>({name:l.label, lead:(emps.find(e=>e.name===l.kev)||{}).email||l.kev||''})),
+    people:emps.filter(e=>hcStatus(e)==='active').slice(0,3).map(e=>({email:e.email||'', name:e.name, title:e.title||'', level:e.level, org:lbl[e.leaderId]||'', manager:(emps.find(x=>x.id===e.managerId)||{}).email||''})),
+    metrics:(st.wbr_metrics||[]).filter(m=>!m.archived).map(m=>({id:m.id, name:m.name, section:secLbl[m.sec]||m.sec, fmt:m.fmt, cad:m.cad, agg:m.agg, dir:m.dir})),
+    readings:[{metric:'Metric name or id', section:'Section name (only needed if the name repeats)', month:mk, week:'w1', value:0}],
+    plan:[{metric:'Metric name or id', month:mk, value:0}],
+  };
+}
+
+/* The weekly update card on Settings > General > Data, and its preview. */
+function cuFmtPay(v){ return v==null||v===''? 'none' : fmtMoney(Number(v)); }
+const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'pay',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',slackId:'Slack id',teamTags:'tags',
+  c1:'cost line 1',w1:'cost line 1 %',t1:'cost line 1 tag',ch1:'cost line 1 channel',c2:'cost line 2',w2:'cost line 2 %',t2:'cost line 2 tag',ch2:'cost line 2 channel',c3:'cost line 3',w3:'cost line 3 %',t3:'cost line 3 tag',ch3:'cost line 3 channel',
+  sec:'section',def:'definition',fmt:'unit',cad:'window',agg:'aggregation',dir:'direction',band:'tolerance',goalDefault:'standing goal',ownerId:'owner',hideWbr:'hidden from review',hidePlan:'hidden from plan'};
+function CuList({items, render, cap}){
+  const [all,setAll]=useState(false); const n=cap||40; const shown=all? items : items.slice(0,n);
+  return React.createElement('div',null, shown.map((x,i)=>React.createElement('div',{key:i,className:'cu-row'},render(x))),
+    items.length>n&&!all? React.createElement('button',{className:'btn sm ghost',onClick:()=>setAll(true)},'Show all '+items.length) : null);
+}
+function CuGroup({title, count, children, open}){
+  const [o,setO]=useState(!!open);
+  if(!count) return null;
+  return React.createElement('div',{className:'cu-grp'},
+    React.createElement('button',{className:'cu-grp-h',onClick:()=>setO(!o)},React.createElement(Icon,{name:o?'chevron-down':'chevron-right',size:14}),
+      React.createElement('span',{className:'section-title',style:{margin:0,background:'none',padding:0}},title), React.createElement('span',{className:'cu-n'},count)),
+    o? React.createElement('div',{className:'cu-body'},children) : null);
+}
+function CuPreview({R, ctx, onApply, onClose, busy}){
+  const lbl={}; (ctx.leaders||[]).concat(R.orgs.add).forEach(l=>{ lbl[l.id]=l.label; });
+  const nm={}; (ctx.employees||[]).forEach(e=>{ nm[e.id]=e.name; }); R.people.hires.forEach(h=>{ nm[h.next.id]=h.next.name; });
+  const secLbl={}; (ctx.wbrS.sections||[]).concat(R.sections.add).forEach(s=>{ secLbl[s.id]=s.label; });
+  const showPay=ctx.canComp;
+  const fv=(k,v,m)=>{ if(k==='leaderId') return lbl[v]||v||'none'; if(k==='managerId'||k==='ownerId') return nm[v]||(v?v:'none'); if(k==='ote') return showPay? cuFmtPay(v) : 'changed';
+    if(k==='level') return v==null?'none':hcLevelName(v); if(k==='onLeave'||k==='hideWbr'||k==='hidePlan') return v?'yes':'no'; if(k==='sec') return secLbl[v]||v; if(k==='goalDefault') return v==null?'none':wbrFmtV(v,(m&&m.fmt)||'num');
+    if(Array.isArray(v)) return v.join(', ')||'none'; return (v==null||v==='')? 'none' : String(v); };
+  const diff=(it,m)=>it.changes.map(k=>React.createElement('span',{key:k,className:'cu-ch'},React.createElement('b',null,CU_FIELD_LBL[k]||k),' ',fv(k,it.prev[k],m),' \u2192 ',fv(k,it.next[k],m)));
+  const c=cuCounts(R); const nothing=cuNothing(R);
+  const head=(t)=>React.createElement('span',{className:'cu-name'},t);
+  const blocked=R.errors.length>0;
+  return React.createElement(Modal,{title:'Review the update', wide:true, onClose,
+    footer:[React.createElement('button',{key:'c',className:'btn',onClick:onClose},'Cancel'),
+      React.createElement('button',{key:'a',className:'btn primary',disabled:busy||nothing||blocked,onClick:onApply},busy?'Applying\u2026':'Apply update')]},
+    React.createElement('div',{className:'cu-sum'},
+      React.createElement('div',null,React.createElement('span',{className:'klabel'},'As of'),' ',fmtDate(R.asOf), R.source? ' \u00b7 '+R.source : ''),
+      React.createElement('div',{className:'cu-stats'},
+        [['People',c.people],['Orgs',c.orgs],['Metrics',c.metrics],['Readings',c.readings],['Plan cells',c.plan]].map(x=>React.createElement('div',{key:x[0],className:'cu-stat'},React.createElement('div',{className:'n'},x[1]),React.createElement('div',{className:'l'},x[0]))))),
+    blocked? React.createElement('div',{className:'cu-msg bad'},React.createElement('b',null,'Fix these before applying - nothing is written while any remain.'),
+      React.createElement(CuList,{items:R.errors,render:t=>t})) : null,
+    nothing&&!blocked? React.createElement('div',{className:'cu-msg'},'Nothing in this file differs from what is already in Cirri.') : null,
+    React.createElement(CuGroup,{title:'New people',count:R.people.hires.length,open:true},
+      React.createElement(CuList,{items:R.people.hires,render:h=>[head(h.next.name),' ',h.next.title||'',' \u00b7 ',lbl[h.next.leaderId]||'',' \u00b7 ',hcLevelName(h.next.level), h.next.managerId? ' \u00b7 reports to '+(nm[h.next.managerId]||''):'', showPay&&h.next.ote? ' \u00b7 '+cuFmtPay(h.next.ote)+(h.next.currency&&h.next.currency!==(WSR.currency||'USD')?' '+h.next.currency:''):'', h.next.status==='departed'?' \u00b7 departed':'']})),
+    React.createElement(CuGroup,{title:'Promotions and transfers',count:R.people.moves.length,open:true},
+      React.createElement(CuList,{items:R.people.moves,render:it=>[head(it.next.name),' ',React.createElement('span',{key:'k',className:'pill-s'},it.kind==='promotion'?'Promotion':'Transfer'),' ',diff(it)]})),
+    React.createElement(CuGroup,{title:'Departures',count:R.people.departs.length,open:true},
+      React.createElement(CuList,{items:R.people.departs,render:it=>[head(it.next.name),' leaves ',fmtDate(it.exit.exitDate), it.exit.attritionType?' \u00b7 '+it.exit.attritionType:'']})),
+    React.createElement(CuGroup,{title:'Other changes to people',count:R.people.edits.length},
+      React.createElement(CuList,{items:R.people.edits,render:it=>[head(it.next.name),' ',diff(it)]})),
+    React.createElement(CuGroup,{title:'In these orgs but not in the file',count:R.people.missing.length,open:true},
+      React.createElement('div',{className:'tiny muted',style:{marginBottom:6}},'Nothing happens to them. If they have left, mark them departed in the file or in People.'),
+      React.createElement(CuList,{items:R.people.missing,render:e=>[head(e.name),' ',e.title||'',' \u00b7 ',lbl[e.leaderId]||'']})),
+    React.createElement(CuGroup,{title:'Orgs',count:R.orgs.add.length+R.orgs.change.length},
+      React.createElement(CuList,{items:R.orgs.add.map(o=>({t:'New',o})).concat(R.orgs.change.map(x=>({t:'Lead',o:x.next,x}))),render:r=>[head(r.o.label),' ',r.t==='New'?('new org'+(r.o.kev?', led by '+r.o.kev:'')):('lead '+r.x.changes[0].from+' \u2192 '+r.x.changes[0].to)]})),
+    React.createElement(CuGroup,{title:'Business Review sections',count:R.sections.add.length},
+      React.createElement(CuList,{items:R.sections.add,render:s=>[head(s.label),' new section']})),
+    React.createElement(CuGroup,{title:'New metrics',count:R.metrics.add.length},
+      React.createElement(CuList,{items:R.metrics.add,render:a=>[head(a.next.name),' ',secLbl[a.next.sec]||'',' \u00b7 ',WBR_FMT[a.next.fmt]||a.next.fmt,' \u00b7 ',(WBR_CAD[a.next.cad]||{}).label||a.next.cad,' \u00b7 ',(WBR_AGG[a.next.agg]||{}).label||'',' \u00b7 ',(WBR_DIR[a.next.dir]||{}).label||'']})),
+    React.createElement(CuGroup,{title:'Changed metrics',count:R.metrics.change.length},
+      React.createElement(CuList,{items:R.metrics.change,render:it=>[head(it.next.name),' ',diff(it,it.next)]})),
+    React.createElement(CuGroup,{title:'Readings',count:R.readings.add.length+R.readings.change.length,open:true},
+      R.readings.same? React.createElement('div',{className:'tiny muted',style:{marginBottom:6}},R.readings.same+' already match and are left alone.') : null,
+      React.createElement(CuList,{items:R.readings.change.concat(R.readings.add),render:r=>[head(r.metric.name),' ',wbrMonthShort(r.pk)+' '+r.wk.label,' ',r.prev? wbrFmtV(r.prev.v,r.metric.fmt,r.prev.raw)+' \u2192 ' : '', React.createElement('b',{key:'v'},wbrFmtV(r.next.v,r.metric.fmt,r.next.raw)), r.prev?'':' (new)']})),
+    React.createElement(CuGroup,{title:'Plan',count:R.plan.cells.length},
+      React.createElement(CuList,{items:R.plan.cells,render:p=>[head(p.metric.name),' ',wbrMonthShort(p.pk),' ',p.from==null?'':wbrFmtV(p.from,p.metric.fmt)+' \u2192 ',React.createElement('b',{key:'v'},p.to==null?'cleared':wbrFmtV(p.to,p.metric.fmt))]})),
+    React.createElement(CuGroup,{title:'Skipped readings',count:R.readings.skipped.length},
+      React.createElement(CuList,{items:R.readings.skipped,render:s=>[head(String((s.row&&s.row.metric)||'?')),' ',s.why]})),
+    React.createElement(CuGroup,{title:'Warnings',count:R.warnings.length,open:R.warnings.length<=8},
+      React.createElement(CuList,{items:R.warnings,render:t=>t})));
+}
+function CuUpdateCard(){
+  const store=useStore(); const H=useHc(); const st=store.state; const PMx=usePerms();
+  const canImport=PMx.can('data.import').allow;
+  const fileRef=useRef(null);
+  const [R,setR]=useState(null); const [busy,setBusy]=useState(false); const [ctx,setCtx]=useState(null);
+  const Hr=useRef(H); Hr.current=H;   /* the apply runs in two steps; the second must see the orgs the first wrote */
+  const leaders=H.leaders||[];
+  const build=()=>({employees:H.records||[], leaders, levels:(H.S&&H.S.levels)||HCR.levels||[], metrics:st.wbr_metrics||[], entries:st.wbr_entries||[], periods:st.wbr_periods||[],
+    wbrS:wbrEffSettings(st.wbrSettings), canComp:!!H.canViewAllComp || store.mode!=='cloud', today:todayStr(), currency:WSR.currency||'USD'});
+  const pick=(e)=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+    const r=new FileReader(); r.onload=()=>{ let data; try{ data=JSON.parse(r.result); }catch(err){ alert('That file is not valid JSON: '+err.message); return; }
+      const c=build(); setCtx(c); setR(cuPlan(data,c)); }; r.readAsText(f); };
+  const apply=async()=>{
+    if(!R||R.errors.length) return; setBusy(true);
+    try{
+      const note='Update from file'+(R.source?' - '+R.source:'');
+      if(R.sectionsOut) store.writeWbrSettings({sections:R.sectionsOut});
+      R.orgs.add.forEach(o=>H.writeLeader(o)); R.orgs.change.forEach(x=>H.writeLeader(x.next));
+      if(R.orgs.add.length||R.orgs.change.length) await new Promise(r=>setTimeout(r,600));
+      const H2=Hr.current;
+      R.people.hires.forEach(h=>{ H2.writeEmp(h.next);
+        if(h.next.status==='departed') H2.writeHistory({id:uid('hh'), empId:h.next.id, type:'attrition', ts:nowISO(), attritionType:h.next.attritionType||'', exitDate:h.next.exitDate||R.asOf, reason:h.next.exitReason||'', roleAt:h.next.role||'', titleAt:h.next.title||'', levelAt:h.next.level, leaderIdAt:h.next.leaderId});
+        else H2.writeHistory({id:uid('hh'), empId:h.next.id, type:'hired', ts:nowISO(), effectiveDate:h.next.startDate||R.asOf, name:h.next.name, role:h.next.role||'', title:h.next.title||'', level:h.next.level, leaderId:h.next.leaderId}); });
+      R.people.moves.forEach(it=>H2.moveEmp(it.prev, it.next, it.kind, {effectiveDate:R.asOf, note}));
+      R.people.departs.forEach(it=>H2.attritEmp(it.next, it.exit));
+      R.people.edits.forEach(it=>H2.writeEmp(it.next));
+      if(store.syncGrantsNow && cuCounts(R).people) store.syncGrantsNow({hc_employees:R.empAfter.map(e=>splitEmpComp(e).rest)});
+      const mOut=Object.keys(R.metricOut).map(id=>({coll:'wbr_metrics', obj:R.metricOut[id]}));
+      const eOut=R.readings.add.concat(R.readings.change).map(r=>({coll:'wbr_entries', obj:r.next}));
+      if(mOut.length||eOut.length) store.writeMany(mOut.concat(eOut));
+      const em=String((store.user&&store.user.email)||'').toLowerCase(); const me=(H.records||[]).find(x=>x.email&&cuLc(x.email)===em);
+      const act=(action,entityType,entityId,entityName,changes)=>store.writeEntity('activity',{id:uid('ac'),ts:nowISO(),actorEmail:em,actorName:me?me.name:(em?em.split('@')[0]:'Someone'),action,entityType,entityId:entityId||'',entityName:entityName||'',changes:changes||[]});
+      R.metrics.add.forEach(a=>act('created','metric',a.next.id,a.next.name,[{k:'source',from:'',to:'update file'}]));
+      R.metrics.change.forEach(it=>act('updated','metric',it.next.id,it.next.name,it.changes.map(k=>({k:CU_FIELD_LBL[k]||k,from:String(it.prev[k]==null?'':it.prev[k]),to:String(it.next[k]==null?'':it.next[k])}))));
+      const c=cuCounts(R);
+      act('imported','import','',R.source||'update file',[{k:'as of',from:'',to:R.asOf}].concat(
+        [['people',c.people],['orgs',c.orgs],['metrics',c.metrics],['readings',c.readings],['plan cells',c.plan]].filter(x=>x[1]).map(x=>({k:x[0],from:'',to:String(x[1])}))));
+      store.flash('Update applied: '+[c.people&&c.people+' people',c.readings&&c.readings+' readings',c.plan&&c.plan+' plan cells',c.metrics&&c.metrics+' metric changes',c.orgs&&c.orgs+' orgs'].filter(Boolean).join(', ')+'.');
+      setR(null);
+    }catch(err){ console.error('update from file',err); alert('The update stopped part way: '+(err.message||err)+'. Check the activity log for what was written.'); }
+    setBusy(false);
+  };
+  const template=()=>{ const t=cuTemplate(st, H.records||[], leaders, wbrEffSettings(st.wbrSettings));
+    const blob=new Blob([JSON.stringify(t,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='cirri-update-template-'+todayStr()+'.json'; a.click(); };
+  if(!canImport) return null;
+  return React.createElement(AdminCard,{title:'Weekly update',desc:'Bring in a file of changes - people, orgs, Business Review readings, metrics and the plan - and review every change before it is written. Anything the file does not mention is left as it is. The template lists this workspace\u2019s orgs and metrics so a file can match them.'},
+    React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+      React.createElement('button',{className:'btn primary',onClick:()=>fileRef.current.click()},iLabel('upload','Update from file')),
+      React.createElement('button',{className:'btn',onClick:template},iLabel('download','Download a template')),
+      React.createElement('input',{type:'file',accept:'application/json,.json',ref:fileRef,style:{display:'none'},onChange:pick})),
+    R&&ctx? React.createElement(CuPreview,{R,ctx,busy,onApply:apply,onClose:()=>setR(null)}) : null);
+}
+
 function AdminCard({title, desc, children}){
   return React.createElement('div',{className:'card',style:{padding:'18px 20px',marginBottom:16}},
     React.createElement('div',{className:'section-title',style:{margin:'0 0 12px'}},title, desc&&React.createElement('span',{className:'fhint','data-tip':desc},React.createElement(Icon,{name:'info',size:13}))),
@@ -11545,7 +11945,7 @@ function AdminView({section, isAdmin}){
   const [title,setTitle]=useState((state.meta&&state.meta.appTitle)||'Cirri'); const [titleMsg,setTitleMsg]=useState('');
   const [confirmReset,setConfirmReset]=useState(false); const [resetTyped,setResetTyped]=useState('');
   const [bulk,setBulk]=useState(null); const [bulkTyped,setBulkTyped]=useState(''); const [bulkMsg,setBulkMsg]=useState('');
-  const fileRef=useRef(null);
+  const fileRef=useRef(null); const storeA=useStore();
   const doExport=()=>{
     const data={meta:state.meta,people:state.people,okrs:state.okrs,projects:state.projects,tasks:state.tasks,events:state.events,activity:state.activity||[],hc_employees:(state.hc_employees||[]).map(e=>({...e,...((g.comp||{})[e.id]||{})})),hc_reqs:state.hc_reqs,hc_attritionLog:state.hc_attritionLog,hc_leaders:state.hc_leaders,hc_history:state.hc_history,feature_requests:state.feature_requests,comments:state.comments,hcSettings:state.hcSettings,hc_activity:state.hc_activity||[],approvals:state.approvals||[],wbr_metrics:state.wbr_metrics||[],wbr_entries:state.wbr_entries||[],wbr_periods:state.wbr_periods||[],wbrSettings:state.wbrSettings||{},notes:state.notes||[],checkins:state.checkins||[],takes:state.takes||[],sessions:state.sessions||[]};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -11557,11 +11957,12 @@ function AdminView({section, isAdmin}){
   if(!isAdmin) return React.createElement('div',{className:'empty card',style:{padding:40}}, React.createElement('div',{className:'big',style:{color:'var(--muted)'}},React.createElement(Icon,{name:'lock',size:30,strokeWidth:1.5})), 'Admin tools need the invite and remove right.');
 
   return React.createElement('div',{style:{maxWidth:720}},
-      React.createElement(AdminCard,{title:'Backup & restore',desc:'Export the entire workspace to a JSON file, or restore from one. Import replaces the current data.'},
+      React.createElement(CuUpdateCard),
+      React.createElement(AdminCard,{title:'Backup & restore',desc:'Export the entire workspace to a JSON file, or restore from one. Import replaces every record in the workspace - for a weekly refresh use Update from file above, which changes only what the file mentions.'},
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
           React.createElement('button',{className:'btn primary',onClick:doExport},iLabel('download','Export JSON backup')),
           canImport&&React.createElement('button',{className:'btn',onClick:()=>fileRef.current.click()},iLabel('upload','Import JSON')),
-          canImport&&React.createElement('button',{className:'btn','data-tip':'Loads Bramble, a fictional 200-person company with a year of history. Replaces everything here.',onClick:async()=>{ if(!confirm('Load the Bramble sample company? This replaces every record in this workspace.')) return; try{ const r=await fetch('bramble-demo.json',{cache:'no-store'}); if(!r.ok) throw new Error('bramble-demo.json is not published beside the app'); const d=await r.json(); importData(d); flash('Sample company loaded.'); }catch(e){ flash('Could not load the sample: '+(e.message||e)); } }},iLabel('sparkles','Load the sample company')),
+          canImport&&React.createElement('button',{className:'btn','data-tip':'Loads Bramble, a fictional 200-person company with a year of history. Replaces everything here.',onClick:async()=>{ if(!confirm('Load the Bramble sample company? This replaces every record in this workspace.')) return; try{ const r=await fetch('bramble-demo.json',{cache:'no-store'}); if(!r.ok) throw new Error('bramble-demo.json is not published beside the app'); const d=await r.json(); g.importData(d); storeA.flash('Sample company loaded.'); }catch(e){ storeA.flash('Could not load the sample: '+(e.message||e)); } }},iLabel('sparkles','Load the sample company')),
           React.createElement('input',{type:'file',accept:'application/json',ref:fileRef,style:{display:'none'},onChange:doImport}))),
       React.createElement(AdminCard,{title:'Accountability history',desc:'Reset every teammate\u2019s accountability history (date pushes and late completions) back to a clean slate. The performance drill-down starts fresh from today.'},
       React.createElement('button',{className:'btn danger',disabled:!PMa.can('grade.reset').allow,onClick:()=>setResetAll(true)},'Reset all history')),
