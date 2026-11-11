@@ -560,6 +560,7 @@ textarea.inp{resize:vertical;min-height:62px;line-height:1.5}
 /* tooltips on the first column sit half outside a clipping scroll box when centred */
 .tip-l[data-tip]:hover::after{left:0;transform:none}
 .tip-r[data-tip]:hover::after{left:auto;right:0;transform:none}
+.tip-al[data-tip]:hover::after{left:0;right:auto;transform:none}
 /* scroll wrappers clip on both axes, so leave room for a bottom-row tooltip */
 .wbr-scroll{overflow-x:auto;padding-bottom:30px;margin-bottom:-26px}
 
@@ -1090,13 +1091,23 @@ const BOOTSTRAP_OWNERS=['kdazkevich@gmail.com'];
    install prompt so Settings can offer it, and know when we are running installed. */
 window.__installPrompt=null; window.__installed=false;
 try{ window.__installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }catch(e){}
-document.addEventListener('mouseover', e=>{ const t=e.target&&e.target.closest&&e.target.closest('[data-tip]'); if(!t) return; const r=t.getBoundingClientRect(); t.classList.toggle('tip-up', window.innerHeight-r.bottom<96); t.classList.toggle('tip-r', r.left+240>window.innerWidth-12 && !t.classList.contains('tip-l')); }, {passive:true});
+/* A tooltip opens below and centred on its anchor. Near an edge of the box it sits in (a modal, a drawer,
+   a scrolling table) or of the window it would be cut off, so it opens upward, or rightward from the
+   anchor's left edge, or leftward from its right edge. */
+function tipClipBox(el){ let l=0, r=window.innerWidth; for(let p=el.parentElement; p && p!==document.body && p!==document.documentElement; p=p.parentElement){ const cs=getComputedStyle(p); if(/auto|scroll|hidden|clip/.test(cs.overflowX)){ const b=p.getBoundingClientRect(); l=Math.max(l,b.left); r=Math.min(r,b.right); } } return {l,r}; }
+document.addEventListener('mouseover', e=>{ const t=e.target&&e.target.closest&&e.target.closest('[data-tip]'); if(!t) return; const r=t.getBoundingClientRect();
+  t.classList.toggle('tip-up', window.innerHeight-r.bottom<96);
+  if(t.classList.contains('tip-l')) return;
+  const box=tipClipBox(t); const half=125, mid=r.left+r.width/2;
+  const nearR=r.left+240>box.r-12, nearL=mid-half<box.l+8;
+  t.classList.toggle('tip-r', nearR && !nearL);
+  t.classList.toggle('tip-al', nearL); }, {passive:true});
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); window.__installPrompt=e; window.dispatchEvent(new Event('cirri-install-ready')); });
 window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__installPrompt=null; window.dispatchEvent(new Event('cirri-install-ready')); });
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-11-1400';
+const BUILD='2026-11-11-1638';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2503,7 +2514,7 @@ function useGtm(){
   const PROJ_AFIELDS=[['name','name'],['ownerId','owner'],['status','status'],['health','health'],['queue','queue'],['dueDate','due date'],['effort','LOE'],['impact','impact'],['okrIds','objectives'],['scIds','success criteria'],['details','description'],['docUrl','doc link'],['blocker','blocker'],['completionNote','completion note']];
   const TASK_AFIELDS=[['title','title'],['ownerIds','owners'],['status','status'],['dueDate','due date'],['projectIds','projects'],['blocker','blocker'],['completionNote','completion note']];
   const OKR_STATUS_LABEL={active:'Active',done:'Completed',abandoned:'Abandoned'};
-const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId','owner'],['baseline','baseline'],['timeframe','timeframe'],['archived','archived']];
+const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId','owner'],['timeframe','timeframe'],['archived','archived']];
   const scDiff=(a,b)=>{
     const out=[]; const am={}; (a||[]).forEach(c=>{ if(c&&c.id) am[c.id]=c; });
     const seen=new Set(); const S=(v)=>v==null?'':String(v);
@@ -3012,7 +3023,6 @@ function OkrForm({initial,onSave,onClose,people}){
       React.createElement('div',{style:{flex:2.6,minWidth:0}}, React.createElement(Field,{label:'Objective name',hint:'short - shown as the title'}, React.createElement('input',{className:'inp',value:f.theme,placeholder:'e.g. Outbound Pilot',onChange:e=>up('theme',e.target.value)}))),
       React.createElement('div',{style:{flex:1,minWidth:130}}, React.createElement(Field,{label:'Target',hint:'completion date or window'}, React.createElement('input',{className:'inp',value:f.timeframe,placeholder:'e.g. Aug 2026',onChange:e=>up('timeframe',e.target.value)})))),
     React.createElement(Field,{label:'Vision narrative',hint:'the story of where this objective takes the org'}, React.createElement('textarea',{className:'inp',value:f.objective,style:{minHeight:80},onChange:e=>up('objective',e.target.value)})),
-    React.createElement(Field,{label:'Starting point',hint:'where things stand today - the baseline the success criteria are measured against'}, React.createElement('textarea',{className:'inp',value:f.baseline||'',style:{minHeight:56},placeholder:'Where are we today?',onChange:e=>up('baseline',e.target.value)})),
     React.createElement(Field,{label:'Owner'}, React.createElement(SearchSelect,{options:peopleOptions(people),value:f.ownerId,onChange:v=>up('ownerId',v),placeholder:'Search people\u2026'})),
     React.createElement(Field,{label:'Success criteria'}, React.createElement(ScEditor,{items:f.successCriteria,onChange:v=>up('successCriteria',v)}))
   );
@@ -3565,7 +3575,6 @@ function OkrDrawer({okr}){
       React.createElement('button',{className:'x',onClick:nav.closeDrawer},'\u00d7')),
     React.createElement('div',{className:'db'},
       okr.objective&&React.createElement('div',{style:{fontSize:14.5,lineHeight:1.66,color:'var(--ink)',fontWeight:500,marginBottom:14}}, okr.objective),
-      okr.baseline&&React.createElement('div',{className:'note',style:{marginBottom:16}},React.createElement('b',null,'Starting point: '), okr.baseline),
       React.createElement('div',{className:'kv',style:{marginBottom:18}},
         React.createElement(MetaRow,{k:'Owner'}, React.createElement(InlinePeople,{ids:okr.ownerId?[okr.ownerId]:[],people,
           onSave:(v)=>A.saveOkr({...okr,ownerId:v[0]||''})})),
@@ -3967,9 +3976,6 @@ function OkrCard({okr}){
       owner&&React.createElement('span',{style:{display:'inline-flex',gap:10,alignItems:'center'}}, React.createElement(Avatar,{person:owner,size:'lg'}), React.createElement(MetaCol,{label:'Owner'}, owner.name)),
       React.createElement(TargetLabel,{value:okr.timeframe,remain:remain}),
       React.createElement(MetaCol,{label:'Projects'}, ps.length)),
-    anyOpen && okr.baseline && React.createElement('div',{style:{margin:'12px 0 2px'}},
-      React.createElement('div',{className:'tiny muted',className:'klabel',style:{marginBottom:3}},'Starting point'),
-      React.createElement('div',{style:{fontSize:13.5,color:'var(--ink-soft)',lineHeight:1.55}}, okr.baseline)),
     anyOpen && React.createElement('div',{style:{marginTop:'auto',paddingTop:8}},
       React.createElement(Disclosure,{title:'Success criteria',count:(okr.successCriteria||[]).length,open:sc,onToggle:()=>setSc(o=>!o)},
         React.createElement('div',null, (okr.successCriteria||[]).map((c,i)=>React.createElement(ScLine,{key:c.id||i,c:c,ps:ps})))),
