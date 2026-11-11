@@ -1096,7 +1096,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-10-1835';
+const BUILD='2026-11-11-1400';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2063,7 +2063,7 @@ function permCompGrants(st, allowEmails){
   });
   return out;
 }
-const COMP_FIELDS = ['ote','performance','notes','attrition'];
+const COMP_FIELDS = ['ote','base','variable','bonus','performance','notes','attrition'];
 // Split an employee object into its non-comp part (rest) and its comp part.
 function splitEmpComp(obj){
   const rest={...obj}; const comp={}; let has=false;
@@ -4274,7 +4274,7 @@ function GradeResetModal({scope, person, onClose}){
     React.createElement('span',{className:'linkish tiny',onClick:()=>setShowChange(s=>!s)}, showChange?'Hide password settings':'Change password'),
     showChange && React.createElement('div',{style:{marginTop:10}},
       isKev
-        ? React.createElement('div',{className:'tiny muted',style:{marginBottom:8}},'Signed in as kev.dazkevich@moego.pet - you can set a new password without the current one.')
+        ? React.createElement('div',{className:'tiny muted',style:{marginBottom:8}},'Signed in as '+((g.user&&g.user.email)||'the workspace owner')+' - you can set a new password without the current one.')
         : React.createElement(Field,{label:'Current password'}, React.createElement('input',{className:'inp',type:'password',value:oldPw,onChange:e=>{setOldPw(e.target.value);setChErr('');}})),
       React.createElement(Field,{label:'New password'}, React.createElement('input',{className:'inp',type:'password',value:newPw,onChange:e=>{setNewPw(e.target.value);setChErr('');}})),
       chErr && React.createElement('div',{className:'flag',style:{marginTop:6}}, chErr),
@@ -5197,7 +5197,7 @@ function cirriSnapshot(g, H, PM, W, opts){
       activeProjectsOwned:active.length, queuedProjectsOwned:queued.length, closedProjectsOwned:closed.length, openTasks:openT.length,
       lastInCirri: lastSeen[String(e.email||'').toLowerCase()]||'', tenureMonths: e.startDate? Math.max(0,Math.round(daysBetween(e.startDate,today)/30)) : null, country:e.country||'',
       performance: canComp(e)? hcPerfLabel(e.performance||'') : undefined, attritionRisk: canComp(e)? (e.attrition||'') : undefined,
-      ote: canComp(e)? Math.round(hcOte(e)) : undefined, fullyLoadedCost: canComp(e)? Math.round(hcEmpFL(e)) : undefined, paidIn:e.currency||WSR.currency, allocation: canComp(e)? [1,2,3].filter(i=>e['c'+i]&&Number(e['w'+i])>0).map(i=>e['w'+i]+'% '+e['c'+i]+(e['t'+i]?' ('+e['t'+i]+')':'')).join(', ') : undefined, overdueTasks:openT.filter(t=>t.overdueDays>0).length, overdueProjects:active.filter(x=>x.overdueDays>0).length,
+      ote: canComp(e)? Math.round(hcOte(e)) : undefined, payParts: canComp(e)? (hcHasParts(e)? HC_PAY_PARTS.map(p=>p+' '+(hcNum(e[p])==null?0:Math.round(hcToBase(hcNum(e[p]),e.currency)))).join(', ') : 'not split') : undefined, fullyLoadedCost: canComp(e)? Math.round(hcEmpFL(e)) : undefined, paidIn:e.currency||WSR.currency, allocation: canComp(e)? [1,2,3].filter(i=>e['c'+i]&&Number(e['w'+i])>0).map(i=>e['w'+i]+'% '+e['c'+i]+(e['t'+i]?' ('+e['t'+i]+')':'')).join(', ') : undefined, overdueTasks:openT.filter(t=>t.overdueDays>0).length, overdueProjects:active.filter(x=>x.overdueDays>0).length,
       datePushesOnOwned:owned.reduce((n,x)=>n+x.datePushes,0), staleActiveProjects:active.filter(x=>x.stale).length, checkinsMissingThisWeek:active.filter(x=>!x.checkinThisWeek).length,
       tasksDone90d:done90.length, onTimeRate90d: done90.length? Math.round(100*onTime/done90.length) : null,
       repliesAsked:rs.asked, repliesAnswered:rs.answered, medianReplyHours: rs.medianHours==null? null : Math.round(rs.medianHours*10)/10, unansweredOver48h:rs.open.length}; });
@@ -5235,7 +5235,7 @@ function cirriSnapshot(g, H, PM, W, opts){
     generatedAt:new Date().toISOString(), today, weekOf:week, build:BUILD, workspace:WSR.name||'', viewer: opts.viewer||null,
     counts:{people:peopleOut.length, projects:projOut.length, activeProjects:projOut.filter(p=>p.queue==='active').length, tasks:taskOut.length, objectives:okrOut.length, metrics:metricsOut.length},
     definitions:{ queue:'QUEUED = a project that exists but is not committed to; ACTIVE = committed, with a date, being worked; CLOSED = done or abandoned. "Open" means active + queued. Only ACTIVE projects count as work in progress.', stale:'no update on open work for '+WSR.staleDays+'+ days', checkin:'the owner posts once a week on each active project: what moved, what is in the way, on track or not', onTimeRate90d:'share of tasks completed in the last 90 days that were done on or before their due date', medianReplyHours:'median hours from an @mention or a comment on their work to their first reply, last 90 days', unansweredOver48h:'requests to them with no reply after two days', datePushes:'times a due date was moved later' },
-    people:peopleOut, objectives:okrOut, peopleChanges:changes, departures, projects:projOut, tasks:taskOut, metrics:metricsOut, costByOrg:costOut, costNote: costOut.length? ('All money in '+WSR.currency+' per year. OTE = salary plus target variable. Fully loaded = OTE times the fully loaded multiplier ('+HCR.flm+', with per-country overrides) covering taxes, benefits, tools and overhead. Cutting a person saves their fully loaded cost per year, less any severance, which is not in this data.') : '', pendingApprovals:approvalsOut, openReqs:reqsOut, checkinsThisWeek:checkinsWeek, recentComments, recentActivity };
+    people:peopleOut, objectives:okrOut, peopleChanges:changes, departures, projects:projOut, tasks:taskOut, metrics:metricsOut, costByOrg:costOut, costNote: costOut.length? ('All money in '+WSR.currency+' per year. OTE = base salary + variable pay at target + target bonus; where a person shows "not split" only the OTE total was recorded. Fully loaded = OTE times the fully loaded multiplier ('+HCR.flm+', with per-country overrides) covering taxes, benefits, tools and overhead. Cutting a person saves their fully loaded cost per year, less any severance, which is not in this data.') : '', pendingApprovals:approvalsOut, openReqs:reqsOut, checkinsThisWeek:checkinsWeek, recentComments, recentActivity };
 }
 /* A short text rendering for the model: compact, one line per entity, with ids for citation. */
 function snapshotText(s){
@@ -5243,8 +5243,8 @@ function snapshotText(s){
   L.push('WORKSPACE '+(s.workspace||'')+' | today '+s.today+' | week of '+s.weekOf+' | '+s.counts.people+' people, '+s.counts.activeProjects+' active of '+s.counts.projects+' projects, '+s.counts.tasks+' tasks, '+s.counts.objectives+' objectives, '+s.counts.metrics+' metrics');
   L.push('DEFINITIONS '+Object.keys(s.definitions).map(k=>k+': '+s.definitions[k]).join('; '));
   if((s.costByOrg||[]).length){ L.push('\nCOST BY ORG - '+s.costNote+' (org | people | total OTE | total fully loaded)'); s.costByOrg.forEach(o=>L.push([o.org,o.people,o.ote,o.fullyLoaded].join(' | '))); }
-  L.push('\nPEOPLE (id | name | title | level | org | manager | tenure months | ACTIVE projects owned | QUEUED projects owned (not in progress) | closed projects owned | open tasks | overdue tasks | overdue ACTIVE projects | date pushes on owned | stale active | check-ins missing this week | tasks done 90d | on-time % | median reply h | unanswered >48h | last in Cirri | on leave'+(s.people.some(p=>p.performance!==undefined)?' | performance rating | attrition risk':'')+(s.people.some(p=>p.ote!==undefined)?' | OTE per year | FULLY LOADED cost per year | paid in | cost allocation':'')+')');
-  s.people.forEach(p=>L.push([p.id,p.name,p.title,p.level,p.org,name(p.managerId),p.tenureMonths==null?'-':p.tenureMonths,p.activeProjectsOwned,p.queuedProjectsOwned,p.closedProjectsOwned,p.openTasks,p.overdueTasks,p.overdueProjects,p.datePushesOnOwned,p.staleActiveProjects,p.checkinsMissingThisWeek,p.tasksDone90d,p.onTimeRate90d==null?'-':p.onTimeRate90d,p.medianReplyHours==null?'-':p.medianReplyHours,p.unansweredOver48h,p.lastInCirri?String(p.lastInCirri).slice(0,10):'-',p.onLeave?'leave':''].concat(p.performance!==undefined?[p.performance||'-',p.attritionRisk||'-']:[]).concat(p.ote!==undefined?[p.ote,p.fullyLoadedCost,p.paidIn||'-',p.allocation||'-']:[]).join(' | ')));
+  L.push('\nPEOPLE (id | name | title | level | org | manager | tenure months | ACTIVE projects owned | QUEUED projects owned (not in progress) | closed projects owned | open tasks | overdue tasks | overdue ACTIVE projects | date pushes on owned | stale active | check-ins missing this week | tasks done 90d | on-time % | median reply h | unanswered >48h | last in Cirri | on leave'+(s.people.some(p=>p.performance!==undefined)?' | performance rating | attrition risk':'')+(s.people.some(p=>p.ote!==undefined)?' | OTE per year | OTE split per year (base, variable at target, bonus at target) | FULLY LOADED cost per year | paid in | cost allocation':'')+')');
+  s.people.forEach(p=>L.push([p.id,p.name,p.title,p.level,p.org,name(p.managerId),p.tenureMonths==null?'-':p.tenureMonths,p.activeProjectsOwned,p.queuedProjectsOwned,p.closedProjectsOwned,p.openTasks,p.overdueTasks,p.overdueProjects,p.datePushesOnOwned,p.staleActiveProjects,p.checkinsMissingThisWeek,p.tasksDone90d,p.onTimeRate90d==null?'-':p.onTimeRate90d,p.medianReplyHours==null?'-':p.medianReplyHours,p.unansweredOver48h,p.lastInCirri?String(p.lastInCirri).slice(0,10):'-',p.onLeave?'leave':''].concat(p.performance!==undefined?[p.performance||'-',p.attritionRisk||'-']:[]).concat(p.ote!==undefined?[p.ote,p.payParts||'not split',p.fullyLoadedCost,p.paidIn||'-',p.allocation||'-']:[]).join(' | ')));
   L.push('\nOBJECTIVES - ACTIVE means being pursued now; COMPLETED means closed as achieved on the date shown; ABANDONED means closed without being achieved. Each success criterion shows start -> now -> target where those were recorded (id | name | STATUS | closed on | owner | timeframe | statement | active projects | completed projects | completion note | success criteria: text [start -> now -> target] (covered by work: yes/no))');
   s.objectives.forEach(o=>L.push([o.id,o.name,({active:'ACTIVE',done:'COMPLETED',abandoned:'ABANDONED',archived:'ARCHIVED'})[o.status]||String(o.status).toUpperCase(),o.doneAt?String(o.doneAt).slice(0,10):'-',name(o.ownerId),o.timeframe||'-',o.statement.replace(/\n/g,' ')||'-',o.activeProjects,o.doneProjects,o.completionNote.replace(/\n/g,' ')||'-',o.criteria.map(c=>c.text+' ['+(c.start||'?')+' -> '+(c.now||'?')+' -> '+(c.target||'?')+'] (covered: '+(c.covered?'yes':'no')+')').join('; ')||'-'].join(' | ')));
   if((s.peopleChanges||[]).length){ L.push('\nPEOPLE CHANGES - hires and departures on record, newest first (date | change | name | role | org)'); s.peopleChanges.forEach(h=>L.push([h.when,h.type,h.name,h.role,h.org].join(' | '))); }
@@ -6204,7 +6204,7 @@ function wbrBuildFinance(existingById, oldTargets){
     id:'wm_fin_'+key, sec:'finance', name:label, cad:'MTD', agg, dir, fmt, band:10,
     num:900+num, goalDefault:null, goals:{}, plan:{}, goalMode:'auto', goalModeBy:{},
     hideWbr:true, hidePlan:false, archived:false, okrIds:[], scIds:[], def:'',
-    goalSrc:'Model', srcNote:'Headcount & Cost model', ownerId:'', ownerName:'Kev',
+    goalSrc:'Model', srcNote:'Headcount & Cost model', ownerId:'', ownerName:'',
   });
   WBR_FIN_LINES.forEach((l,i)=>{ if(!existingById['wm_fin_'+l[0]]) out.push(base(l[0],l[1],l[2],l[3],l[4],i)); });
   const byId={}; out.forEach(m=>{byId[m.id]=m;});
@@ -9837,6 +9837,13 @@ function fxRate(cur){ const base=WSR.currency||'USD'; if(!cur||cur===base) retur
 /* Amount in the workspace currency. Unknown rate: the amount is treated as already in the workspace currency and flagged by fxKnown(). */
 function hcToBase(amount, cur){ if(amount==null||isNaN(amount)) return amount; const r=fxRate(cur); return r? amount/r : amount; }
 function fxKnown(cur){ return fxRate(cur)!==null; }
+/* OTE is base + variable + bonus. When a record has any of the three, OTE is worked out from them and
+   stored beside them so every cost calculation keeps reading one number; a record with none keeps the
+   OTE it was given. Nothing typed that can be derived. */
+const HC_PAY_PARTS=['base','variable','bonus'];
+function hcNum(v){ if(v==null||v==='') return null; const n=typeof v==='number'? v : parseFloat(String(v).replace(/[$,\s]/g,'')); return isFinite(n)? n : null; }
+function hcHasParts(e){ return !!e && HC_PAY_PARTS.some(k=>hcNum(e[k])!=null); }
+function hcOteFromParts(e){ return hcHasParts(e)? HC_PAY_PARTS.reduce((a,k)=>a+(hcNum(e[k])||0),0) : null; }
 function hcOte(e){ return e&&e.ote? hcToBase(e.ote, e.currency) : (e&&e.ote)||0; }   /* OTE in the workspace currency */
 async function fxFetch(base){ const r=await fetch('https://api.frankfurter.app/latest?from='+encodeURIComponent(base)); if(!r.ok) throw new Error('rates '+r.status); const j=await r.json(); return {rates:j.rates||{}, date:j.date||todayStr()}; }
 const HCR=JSON.parse(JSON.stringify(HC_DEFAULTS));
@@ -11024,7 +11031,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
   const isHire = M==='hire';
   const isMove = M==='transfer'||M==='promotion';
   const today=new Date().toISOString().slice(0,10);
-  const blank={id:'',leaderId,name:'',title:'',ote:'',country:'USA',role:'',level:2,manager:'',teamTags:[],startDate:'',performance:'Good',attrition:'',onLeave:false,notes:'',c1:'CAC',w1:100,t1:'',ch1:'',c2:'',w2:0,t2:'',ch2:'',c3:'',w3:0,t3:'',ch3:''};
+  const blank={id:'',leaderId,name:'',title:'',ote:'',base:'',variable:'',bonus:'',country:'USA',role:'',level:2,manager:'',teamTags:[],startDate:'',performance:'Good',attrition:'',onLeave:false,notes:'',c1:'CAC',w1:100,t1:'',ch1:'',c2:'',w2:0,t2:'',ch2:'',c3:'',w3:0,t3:'',ch3:''};
   const [f,setF]=useState(()=>{ const init=Object.assign({},blank,emp||{},{leaderId:(emp&&emp.leaderId)||leaderId}); if(isHire&&!init.startDate)init.startDate=today; return init; });
   const [effDate,setEffDate]=useState(today);
   const [moveNote,setMoveNote]=useState('');
@@ -11041,7 +11048,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
 
   const build=()=>Object.assign({}, emp||{}, {
     id:isNew?uid('e'):f.id, leaderId:f.leaderId||leaderId,
-    name:(f.name||'').trim(), title:(f.title||'').trim(), ote:parseFloat(f.ote)||null, currency:f.currency||WSR.currency||'USD', country:f.country||'USA', role:f.role||'',
+    name:(f.name||'').trim(), title:(f.title||'').trim(), base:hcNum(f.base), variable:hcNum(f.variable), bonus:hcNum(f.bonus), ote:(hcHasParts(f)? hcOteFromParts(f) : (parseFloat(f.ote)||null)), currency:f.currency||WSR.currency||'USD', country:f.country||'USA', role:f.role||'',
     level:parseInt(f.level)||1, manager:f.manager||'', managerId:f.managerId||'', teamTags:[...(f.teamTags||[])], startDate:f.startDate||'',
     performance:f.performance||'Good', attrition:f.attrition||'', onLeave:!!f.onLeave, notes:f.notes||'',
     status:isHire?'active':((emp&&emp.status)||'active'),
@@ -11093,7 +11100,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
     isMove&&(function(){
       const L=(id)=>((leaders.find(l=>l.id===id)||{}).label||id);
       const oldOte=emp.ote?hcFmtFull(emp.ote):'\u2014';
-      const newOte=parseFloat(f.ote)?hcFmtFull(parseFloat(f.ote)):'\u2014';
+      const nOte=hcHasParts(f)? hcOteFromParts(f) : parseFloat(f.ote); const newOte=nOte?hcFmtFull(nOte):'\u2014';
       const rows=[['Title',emp.title||'\u2014',(f.title||'').trim()||'\u2014'],['Level',hcLevelName(emp.level),hcLevelName(parseInt(f.level)||emp.level)],['OTE',oldOte,newOte]]
         .concat(M==='transfer'?[['Org',L(emp.leaderId),L(f.leaderId)],['Manager',emp.manager||'\u2014',f.manager||'\u2014']]:[]);
       const changed=rows.filter(r=>String(r[1])!==String(r[2]));
@@ -11109,7 +11116,15 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
     })(),
     field('Name',inp('name')),
     field('Title',inp('title',null,'e.g. Senior AE')),
-    React.createElement('div',{className:'f-row'}, field('OTE ('+(f.currency||WSR.currency||'USD')+')',inp('ote','number','Annual')),
+    React.createElement('div',{className:'f-row'},
+      field('Base ('+(f.currency||WSR.currency||'USD')+')',inp('base','number','Annual salary')),
+      field('Variable',inp('variable','number','At target'),'Commission or other variable pay at 100% of target, per year.'),
+      field('Bonus',inp('bonus','number','At target'),'Target bonus per year. Leave blank if there is none.'),
+      field('OTE', hcHasParts(f)
+        ? React.createElement('div',{className:'inp',style:{background:'var(--panel-2)',fontWeight:700,fontVariantNumeric:'tabular-nums',cursor:'default'}}, Math.round(hcOteFromParts(f)).toLocaleString()+' '+(f.currency||WSR.currency||'USD'))
+        : inp('ote','number','Annual'),
+        hcHasParts(f)? 'Base + variable + bonus. Worked out, never typed.' : 'Enter base, variable and bonus and OTE is worked out from them. A record without them keeps the OTE typed here.')),
+    React.createElement('div',{className:'f-row'},
       field('Paid in',React.createElement('select',{className:'inp',value:f.currency||WSR.currency||'USD',onChange:e=>set('currency',e.target.value)}, CURRENCIES.map(c=>React.createElement('option',{key:c[0],value:c[0]},c[0]))),'The currency this person is paid in. Reports convert to the workspace currency with the rates under Settings > Cost.'), field('Country',React.createElement('select',{className:'inp',value:f.country,onChange:e=>set('country',e.target.value)},HC_COUNTRIES.map(c=>React.createElement('option',{key:c,value:c},c))))),
     field('Role',inp('role')),
     React.createElement('div',{className:'f-row'}, field('Work email',inp('email','email','name@company.com'),'The one they sign in with. It is how the app knows who they are, and how Slack finds them for direct messages.'),
@@ -11208,6 +11223,9 @@ function HcHistoryTimeline({emp,unlocked,leaders}){
         React.createElement('span',{className:'tiny muted',style:{flex:'0 0 auto'}},fmt(date))),
       body));
   const items=[];
+  /* A record that never went through a requisition started on its start date. Any 'hired' entry on such a
+     record came from an earlier import and would repeat that, so the single Started entry stands for it. */
+  const hasOpened=evs.some(e=>e.type==='opened');
   evs.forEach(ev=>{
     if(ev.type==='performance'){
       const good=/good/i.test(ev.to||'');
@@ -11225,6 +11243,7 @@ function HcHistoryTimeline({emp,unlocked,leaders}){
       items.push(node(React.createElement(Icon,{name:ev.type==='promotion'?'trending-up':'arrow-left-right',size:12}),c,ev.type==='promotion'?'Promoted':'Transferred',ev.effectiveDate||ev.ts,
         React.createElement('div',{style:{marginTop:3,display:'flex',flexDirection:'column',gap:2}}, changeRows(ev), ev.note&&React.createElement('div',{className:'tiny',style:{color:'var(--muted)',fontStyle:'italic',marginTop:2}},'\u201c'+ev.note+'\u201d'))));
     } else if(ev.type==='hired'){
+      if(!hasOpened) return;
       items.push(node(React.createElement(Icon,{name:'star',size:12}),'var(--green)','Hired',ev.effectiveDate||ev.ts,
         React.createElement('div',{className:'tiny',style:{color:'var(--muted)',marginTop:2}}, (ev.name||emp.name||'')+((ev.title||ev.role)?' \u00b7 '+(ev.title||ev.role):''))));
     } else if(ev.type==='opened'){
@@ -11232,11 +11251,12 @@ function HcHistoryTimeline({emp,unlocked,leaders}){
         React.createElement('div',{className:'tiny',style:{color:'var(--muted)',marginTop:2}}, (ev.title||'')+(ev.note?' \u00b7 '+ev.note:''))));
     }
   });
-  // synthesized join for legacy records that never had an 'opened' event
-  const hasOpened=evs.some(e=>e.type==='opened');
+  // the start of any record that did not come through a requisition
   if(!hasOpened && emp.startDate && hcStatus(emp)!=='open'){
-    items.push(node('\u25CF','var(--muted-2)','Joined MoeGo',emp.startDate,
-      React.createElement('div',{className:'tiny',style:{color:'var(--muted)',marginTop:2}}, 'Started as '+((evs.length?(evs[evs.length-1].fromRole||emp.role):emp.role)||'\u2014'))));
+    const first=evs.filter(e=>e.type==='promotion'||e.type==='transfer').slice(-1)[0];
+    const startedAs=(first&&(first.fromTitle||first.fromRole))||emp.title||emp.role||'';
+    items.push(node('\u25CF','var(--muted-2)','Started',emp.startDate,
+      React.createElement('div',{className:'tiny',style:{color:'var(--muted)',marginTop:2}}, 'Started as '+(startedAs||'\u2014'))));
   }
   if(!items.length) items.push(React.createElement('div',{key:'none',className:'muted tiny'},'No history yet.'));
   return React.createElement('div',null, items);
@@ -11316,7 +11336,7 @@ function HcEmployeeDrawer({empId,onClose}){
                 onClick:()=>{ const el=document.getElementById('hc-history-'+emp.id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }},
                 n+' rating'+(n===1?'':'s')) : null; })())
           :React.createElement('span',{style:{filter:'blur(4px)',color:'var(--muted-2)'}},'\u25CF\u25CF\u25CF')),
-        React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'OTE / FL'),React.createElement('div',{style:{fontWeight:600,fontSize:13}}, seesComp?((emp.ote?hcFmtFull(hcOte(emp)):'\u2014')+' / '+(fl?hcFmtFull(fl):'\u2014')+((emp.ote&&emp.currency&&emp.currency!==(WSR.currency||'USD'))? ' \u00b7 paid '+emp.currency+' '+Math.round(emp.ote).toLocaleString()+(fxKnown(emp.currency)?'':' (no rate)') : '')):React.createElement('span',{style:{filter:'blur(4px)',userSelect:'none',color:'var(--muted-2)'}},'$xxxxxx'))));
+        React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'OTE / FL'),React.createElement('div',{style:{fontWeight:600,fontSize:13}}, seesComp?React.createElement(React.Fragment,null,((emp.ote?hcFmtFull(hcOte(emp)):'\u2014')+' / '+(fl?hcFmtFull(fl):'\u2014')+((emp.ote&&emp.currency&&emp.currency!==(WSR.currency||'USD'))? ' \u00b7 paid '+emp.currency+' '+Math.round(emp.ote).toLocaleString()+(fxKnown(emp.currency)?'':' (no rate)') : '')), hcHasParts(emp)? React.createElement('div',{className:'tiny muted',style:{fontWeight:500,marginTop:2}}, HC_PAY_PARTS.filter(p=>hcNum(emp[p])!=null).map(p=>({base:'Base',variable:'Variable',bonus:'Bonus'})[p]+' '+Math.round(hcNum(emp[p])).toLocaleString()).join(' \u00b7 ')+((emp.currency&&emp.currency!==(WSR.currency||'USD'))?' '+emp.currency:'')) : null):React.createElement('span',{style:{filter:'blur(4px)',userSelect:'none',color:'var(--muted-2)'}},'$xxxxxx'))));
 
   return React.createElement('div',{className:'scrim',style:{justifyContent:'flex-end'},onMouseDown:e=>{if(e.target===e.currentTarget)onClose();}},
     React.createElement('div',{className:'hc-drawer'},
@@ -11566,7 +11586,7 @@ function HcModalHost({modal,onClose,onOpen}){
 const CU_FMT={num:'num',number:'num',count:'num',cur:'cur',currency:'cur',money:'cur',pct:'pct',percent:'pct',days:'days',day:'days',hrs:'hrs',hours:'hrs',sec:'sec',seconds:'sec',mo:'mo',months:'mo',score:'score',ratio:'ratio'};
 const CU_DIR={up:'up',higher:'up',down:'down',lower:'down',target:'target'};
 const CU_AGG={cum:'cum',cumulative:'cum',sum:'cum',snap:'snap',rate:'snap',average:'snap',snapshot:'snap',level:'snap'};
-const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','ote','onLeave','status','exitDate','attritionType','exitReason','slackId','teamTags','cost'];
+const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','base','variable','bonus','ote','onLeave','status','exitDate','attritionType','exitReason','slackId','teamTags','cost'];
 function cuLc(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function cuHas(o,k){ return o && Object.prototype.hasOwnProperty.call(o,k) && o[k]!==undefined; }
 function cuSame(a,b){ return JSON.stringify(a==null?'':a)===JSON.stringify(b==null?'':b); }
@@ -11648,6 +11668,12 @@ function cuPlan(file, ctx){
     if(cuHas(row,'onLeave')) patch.onLeave=!!row.onLeave;
     if(cuHas(row,'teamTags')) patch.teamTags=Array.isArray(row.teamTags)? row.teamTags.map(String).slice(0,3) : [];
     if(cuHas(row,'ote')){ if(!ctx.canComp) R.warnings.push(w+': pay skipped - your permission set does not include this person\u2019s pay.'); else { const v=cuNum(row.ote); if(v!=null) patch.ote=v; else if(row.ote!==null) R.warnings.push(w+': ote "'+row.ote+'" is not a number; pay left as it was.'); } }
+    if(['base','variable','bonus'].some(k=>cuHas(row,k))){
+      if(!ctx.canComp) R.warnings.push(w+': pay skipped - your permission set does not include this person\u2019s pay.');
+      else { ['base','variable','bonus'].forEach(k=>{ if(!cuHas(row,k)) return; const v=cuNum(row[k]); if(v!=null||row[k]===null||row[k]==='') patch[k]=v; else R.warnings.push(w+': '+k+' "'+row[k]+'" is not a number; left as it was.'); });
+        const merged=Object.assign({}, prev||{}, patch); const o=hcOteFromParts(merged);
+        if(o!=null){ if(cuHas(row,'ote') && cuNum(row.ote)!=null && Math.round(cuNum(row.ote))!==Math.round(o)) R.warnings.push(w+': ote '+row.ote+' does not equal base + variable + bonus ('+Math.round(o)+'); the sum is used.'); patch.ote=o; } } }
+    else if(cuHas(row,'ote') && ctx.canComp && prev && hcHasParts(prev)){ delete patch.ote; R.warnings.push(w+': ote ignored - this person\u2019s OTE is worked out from base, variable and bonus. Send those instead.'); }
     if(cuHas(row,'cost')){ const c=Array.isArray(row.cost)? row.cost.slice(0,3) : []; const tot=c.reduce((a,x)=>a+(Number(x&&x.pct)||0),0);
       if(!c.length || Math.round(tot)!==100) R.warnings.push(w+': cost allocation must add up to 100% across at most three lines; left as it was.');
       else [1,2,3].forEach(i=>{ const x=c[i-1]||{}; patch['c'+i]=x.bucket||''; patch['w'+i]=Number(x.pct)||0; patch['t'+i]=x.tag||''; patch['ch'+i]=(x.bucket==='CAC')?(x.channel||''):''; }); }
@@ -11797,7 +11823,7 @@ function cuTemplate(st, emps, leaders, S){
       rule:'Merge, never replace. Leave a field out and it stays as it is. Leave a section out and nothing in it changes.',
       people:'Matched by work email (then employeeId). New email = new hire. Higher level = promotion; new org or manager = transfer; status departed = departure.',
       rosterScope:'Optional. The orgs this file lists completely, or "all". Active people in those orgs who are missing from the file are flagged for review, never removed.',
-      people_fields:CU_PEOPLE_KEYS.join(', ')+'. level: a number or a ladder name. manager: an email. org: an org name. ote: annual, in the person\u2019s currency. cost: up to three {bucket, pct, tag, channel} adding to 100.',
+      people_fields:CU_PEOPLE_KEYS.join(', ')+'. level: a number or a ladder name. manager: an email. org: an org name. base, variable (at target) and bonus (target): annual, in the person\u2019s currency; OTE is worked out from them. ote alone only for someone without them. cost: up to three {bucket, pct, tag, channel} adding to 100.',
       metrics:'Create or change a metric. Matched by id, then name within section. fmt: number|currency|percent|days|hours|seconds|months|score|ratio. cad: '+WBR_CAD_ORDER.join('|')+'. agg: cumulative|rate. dir: up|down|target. band: % tolerance. goal: standing goal. owner: email.',
       readings:'One value per metric per checkpoint. month YYYY-MM plus week (w1, w2... or eom), or a date equal to a checkpoint date. Percent metrics are 0-100. Seconds are seconds.',
       plan:'The finance model number for a metric in a month: {metric, month, value}. value null clears it.',
@@ -11813,7 +11839,7 @@ function cuTemplate(st, emps, leaders, S){
 
 /* The weekly update card on Settings > General > Data, and its preview. */
 function cuFmtPay(v){ return v==null||v===''? 'none' : fmtMoney(Number(v)); }
-const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'pay',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',slackId:'Slack id',teamTags:'tags',
+const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'OTE',base:'base',variable:'variable',bonus:'bonus',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',slackId:'Slack id',teamTags:'tags',
   c1:'cost line 1',w1:'cost line 1 %',t1:'cost line 1 tag',ch1:'cost line 1 channel',c2:'cost line 2',w2:'cost line 2 %',t2:'cost line 2 tag',ch2:'cost line 2 channel',c3:'cost line 3',w3:'cost line 3 %',t3:'cost line 3 tag',ch3:'cost line 3 channel',
   sec:'section',def:'definition',fmt:'unit',cad:'window',agg:'aggregation',dir:'direction',band:'tolerance',goalDefault:'standing goal',ownerId:'owner',hideWbr:'hidden from review',hidePlan:'hidden from plan'};
 function CuList({items, render, cap}){
@@ -11834,7 +11860,7 @@ function CuPreview({R, ctx, onApply, onClose, busy}){
   const nm={}; (ctx.employees||[]).forEach(e=>{ nm[e.id]=e.name; }); R.people.hires.forEach(h=>{ nm[h.next.id]=h.next.name; });
   const secLbl={}; (ctx.wbrS.sections||[]).concat(R.sections.add).forEach(s=>{ secLbl[s.id]=s.label; });
   const showPay=ctx.canComp;
-  const fv=(k,v,m)=>{ if(k==='leaderId') return lbl[v]||v||'none'; if(k==='managerId'||k==='ownerId') return nm[v]||(v?v:'none'); if(k==='ote') return showPay? cuFmtPay(v) : 'changed';
+  const fv=(k,v,m)=>{ if(k==='leaderId') return lbl[v]||v||'none'; if(k==='managerId'||k==='ownerId') return nm[v]||(v?v:'none'); if(k==='ote'||k==='base'||k==='variable'||k==='bonus') return showPay? cuFmtPay(v) : 'changed';
     if(k==='level') return v==null?'none':hcLevelName(v); if(k==='onLeave'||k==='hideWbr'||k==='hidePlan') return v?'yes':'no'; if(k==='sec') return secLbl[v]||v; if(k==='goalDefault') return v==null?'none':wbrFmtV(v,(m&&m.fmt)||'num');
     if(Array.isArray(v)) return v.join(', ')||'none'; return (v==null||v==='')? 'none' : String(v); };
   const diff=(it,m)=>it.changes.map(k=>React.createElement('span',{key:k,className:'cu-ch'},React.createElement('b',null,CU_FIELD_LBL[k]||k),' ',fv(k,it.prev[k],m),' \u2192 ',fv(k,it.next[k],m)));
@@ -11902,7 +11928,7 @@ function CuUpdateCard(){
       const H2=Hr.current;
       R.people.hires.forEach(h=>{ H2.writeEmp(h.next);
         if(h.next.status==='departed') H2.writeHistory({id:uid('hh'), empId:h.next.id, type:'attrition', ts:nowISO(), attritionType:h.next.attritionType||'', exitDate:h.next.exitDate||R.asOf, reason:h.next.exitReason||'', roleAt:h.next.role||'', titleAt:h.next.title||'', levelAt:h.next.level, leaderIdAt:h.next.leaderId});
-        else H2.writeHistory({id:uid('hh'), empId:h.next.id, type:'hired', ts:nowISO(), effectiveDate:h.next.startDate||R.asOf, name:h.next.name, role:h.next.role||'', title:h.next.title||'', level:h.next.level, leaderId:h.next.leaderId}); });
+      });
       R.people.moves.forEach(it=>H2.moveEmp(it.prev, it.next, it.kind, {effectiveDate:R.asOf, note}));
       R.people.departs.forEach(it=>H2.attritEmp(it.next, it.exit));
       R.people.edits.forEach(it=>H2.writeEmp(it.next));
@@ -12537,7 +12563,7 @@ function SettingsAgentContext(){
   const save=()=>{ g.writeMeta({workspace:Object.assign({}, meta.workspace||{}, {agent:Object.assign({}, (meta.workspace||{}).agent||{}, {context:text.trim()})})}); setMsg('Saved.'); };
   return React.createElement('div',{className:'spage'},
     React.createElement(AdminCard,{title:'About the company',desc:'Everything Cirri cannot learn from the records: what the company does and sells, how it makes money, the strategy and this year\u2019s priorities, what each org is for, what good looks like, and the industry benchmarks to judge performance against. Plain English; it goes into every answer and every brief as fact. Two hundred words is enough to start; grow it as the questions reveal gaps.'},
-      React.createElement('textarea',{className:'inp',rows:16,style:{width:'100%',fontSize:13,lineHeight:1.5},placeholder:'e.g. MoeGo is vertical SaaS for pet-care businesses (groomers, boarding, mobile, multi-location). Revenue is subscription plus payments. 2026 priority: profitable growth - outbound must reach 12-month CAC payback. Benchmarks we hold ourselves to: implementation go-live under 45 days for T2-T3; support first response under 60 minutes and CSAT above 92%; sales reps at 4x+ quota-to-OTE; marketing MQL-to-SQO above 12%\u2026',value:text,onChange:e=>{ setText(e.target.value); setMsg(''); }}),
+      React.createElement('textarea',{className:'inp',rows:16,style:{width:'100%',fontSize:13,lineHeight:1.5},placeholder:'e.g. We sell software to small and mid-sized businesses. Revenue is subscription plus usage fees. This year\u2019s priority is profitable growth: new-logo CAC payback under 12 months. Benchmarks we hold ourselves to: onboarding go-live under 30 days, support first response under an hour, reps at 4x+ quota-to-OTE. Each org is for: Sales wins new logos, Customer Success keeps and grows them, Support answers within the hour.',value:text,onChange:e=>{ setText(e.target.value); setMsg(''); }}),
       React.createElement('div',{className:'tiny muted',style:{marginTop:6}},text.length.toLocaleString()+' characters'),
       React.createElement(SaveBar,{dirty,msg,onSave:save,onReset:()=>{ setText(base); setMsg(''); }})));
 }
