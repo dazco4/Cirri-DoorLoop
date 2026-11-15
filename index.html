@@ -1060,22 +1060,13 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .sce{margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
 .sce:last-of-type{border-bottom:0}
 .sce-top{display:flex;gap:8px}
-.sce-link{display:flex;gap:8px;align-items:center;margin-top:6px;min-width:0}
 .sce-pick{flex:1;min-width:0}
 .sce-chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;min-width:0;background:#f2f6fa;border:1px solid var(--line);border-radius:8px;padding:4px 6px 4px 9px;font-size:12.5px;color:var(--ink)}
 .sce-chip-n{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sce-chip-s{color:var(--ink-2);font-size:11.5px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sce-chip-x{border:0;background:none;cursor:pointer;color:var(--ink-2);font-size:15px;line-height:1;padding:0 3px;flex:0 0 auto}
-.sce-chip-x:hover{color:var(--ink)}
-.sce-new{margin-top:8px;background:#f6f9fb;border:1px solid var(--line);border-radius:10px;padding:12px}
-.sce-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
-.sce-f{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:11.5px;font-weight:700;color:var(--ink-2)}
-.sce-f.wide{grid-column:1 / -1}
-.sce-f .seg{align-self:flex-start;flex-wrap:wrap}
-.sce-new-f{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
-@media (max-width:640px){.sce-grid{grid-template-columns:1fr}}
-.sce-t{resize:none;min-height:0;line-height:1.45;overflow:hidden}
-.sce-top .btn.icon{align-self:flex-start}
+.sce-top{align-items:center}
+.sce-top .sce-chip{flex:1 1 auto;padding:7px 10px}
+.sce-old{font-size:12.5px;color:var(--ink-2);margin:0 0 6px;overflow-wrap:anywhere;line-height:1.45}
 </style>
 </head>
 <body>
@@ -1135,7 +1126,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-15-0920';
+const BUILD='2026-11-15-1503';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -1240,9 +1231,15 @@ function isStale(lastActivity, status){ if(status==='done'||status==='abandoned'
 const isClosedStatus=(s)=>s==='done'||s==='abandoned';
 const isActiveProj=(p)=>!!(p&&p.queue==='active'&&!isClosedStatus(p.status));
 /* success criteria: legacy strings get deterministic ids until first save persists real objects */
-const scText=(c)=> typeof c==='string'?c:((c&&c.text)||'');
+/* A success criterion is a Business Review metric. Its name on screen is the metric's name, read live from
+   SCM (refreshed by StoreProvider on every render, like WSR and HCR), so a rename in the review shows on
+   every objective at once. scRaw is the old free text, kept only for criteria written before metrics. */
+const SCM={};
+function scRefresh(metrics){ Object.keys(SCM).forEach(k=>delete SCM[k]); (metrics||[]).forEach(m=>{ if(m&&m.id) SCM[m.id]=m.name||''; }); }
+const scRaw=(c)=> typeof c==='string'?c:((c&&c.text)||'');
+const scText=(c)=>{ if(c&&typeof c==='object'&&c.metricId){ if(SCM[c.metricId]) return SCM[c.metricId]; return scRaw(c)||'Metric no longer in the Business Review'; } return scRaw(c); };
 const isStretchProj=(p)=>!!(p&&p.queue==='stretch'&&!isClosedStatus(p.status));
-function normSc(o){ return (o.successCriteria||[]).map((c,i)=>{ if(c&&typeof c==='object') return Object.assign({},c,{id:c.id||o.id+'_sc'+i,text:scText(c)}); return {id:o.id+'_sc'+i,text:scText(c)}; }); }
+function normSc(o){ return (o.successCriteria||[]).map((c,i)=>{ if(c&&typeof c==='object') return Object.assign({},c,{id:c.id||o.id+'_sc'+i,text:scRaw(c)}); return {id:o.id+'_sc'+i,text:scRaw(c)}; }); }
 /* parse a timeframe string into a window - tolerant of how people actually write dates:
    "2026", "2026 H1", "Q3 2026", "Aug 2026", "Dec 31", "December 31st - 2026", "2026-2028", "12/31/2026" */
 function parseTimeframe(tf, createdAt){
@@ -2159,7 +2156,7 @@ function StoreProvider({children}){
   const [state, setState] = useState(blankState);
   const stateRef = useRef(state); stateRef.current = state;
   /* keep the runtime copies of the settings in step with the state every render */
-  wsRefresh(state.meta); hcRefresh(hcEffSettings(state.hcSettings));
+  wsRefresh(state.meta); hcRefresh(hcEffSettings(state.hcSettings)); scRefresh(state.wbr_metrics);
   const [me, setMe] = useState(()=>{ try{return localStorage.getItem(LS_ME)||'';}catch(e){return '';} });
   const [sync, setSync] = useState('local');     // local | live | connecting | error
   const [toast, setToast] = useState(null);
@@ -2538,7 +2535,7 @@ function useGtm(){
     if(k==='health') return (HEALTH[v]||{}).label||String(v);
     if(k==='conviction') return (CONVICTION[v]||{}).label||String(v);
     if(k==='queue') return v==='active'?'Active':(v==='stretch'?'Stretch':'In queue');
-    if(k==='successCriteria') return v.map(c=>typeof c==='string'?c:((c&&c.text)||'')).filter(Boolean).join(' | ');
+    if(k==='successCriteria') return v.map(c=>scText(c)).filter(Boolean).join(' | ');
     if(k==='archived') return v?'Archived':'Active';
     const sv=String(v); return sv.length>90? sv.slice(0,87)+'\u2026' : sv;
   };
@@ -2562,7 +2559,7 @@ const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId',
     (b||[]).forEach(c=>{
       if(!c||!c.id) return; seen.add(c.id); const pv=am[c.id];
       if(!pv){ if(scText(c)) out.push({k:'criterion added',from:'',to:clip(scText(c))}); return; }
-      if(S(pv.text)!==S(c.text)) out.push({k:'criterion',from:clip(scText(pv)),to:clip(scText(c))});
+      if(S(scText(pv))!==S(scText(c))) out.push({k:'criterion',from:clip(scText(pv)),to:clip(scText(c))});
     });
     (a||[]).forEach(c=>{ if(c&&c.id&&!seen.has(c.id)) out.push({k:'criterion removed',from:'',to:clip(scText(c))}); });
     return out;
@@ -3098,56 +3095,37 @@ function OkrTrends({okr}){
           lines:[{vals:tr.pts.map(p=>p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]})
         : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.')))));
 }
-/* A new Business Review metric, made from the objective form. It is a real metric: it appears in the review. */
-function ScNewMetric({W, seed, onCancel, onCreate}){
-  const secs=(W.S.sections||[]);
-  const [f,setF]=useState({name:String(seed||'').trim().slice(0,80), sec:(secs.find(x=>x.id!=='finance')||secs[0]||{}).id||'', fmt:'num', dir:'up', agg:'cum', goal:''});
-  const up=(k,v)=>setF(x=>Object.assign({},x,{[k]:v}));
-  const fmtLbl=(k)=>{ const v=WBR_FMT[k]; return typeof v==='string'? v : ((v&&(v.label||v.full))||k); };
-  const seg=(k,opts)=>React.createElement('div',{className:'seg sm'}, opts.map(o=>React.createElement('button',{key:o[0],type:'button',className:f[k]===o[0]?'on':'',onClick:()=>up(k,o[0])},o[1])));
-  const ok=f.name.trim().length>0 && !!f.sec;
-  const create=()=>{ if(!ok) return; const g=f.goal===''? null : wbrParseVal(f.goal);
-    const out=W.A.writeMetric(Object.assign(wbrBlankMetric(f.sec),{name:f.name.trim(),fmt:f.fmt,dir:f.dir,agg:f.agg,cad:'MTD',goalDefault:g,def:String(seed||'').trim()}));
-    onCreate(out); };
-  return React.createElement('div',{className:'sce-new'},
-    React.createElement('div',{className:'klabel',style:{marginBottom:8}},'New Business Review metric'),
-    React.createElement('div',{className:'sce-grid'},
-      React.createElement('label',{className:'sce-f wide'},React.createElement('span',null,'Name'),React.createElement('input',{className:'inp',value:f.name,autoFocus:true,placeholder:'e.g. Outbound payback (months)',onChange:e=>up('name',e.target.value)})),
-      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Section'),React.createElement('select',{className:'inp',value:f.sec,onChange:e=>up('sec',e.target.value)},secs.map(x=>React.createElement('option',{key:x.id,value:x.id},x.label||x.id)))),
-      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Unit'),React.createElement('select',{className:'inp',value:f.fmt,onChange:e=>up('fmt',e.target.value)},Object.keys(WBR_FMT).map(k=>React.createElement('option',{key:k,value:k},fmtLbl(k))))),
-      React.createElement('div',{className:'sce-f'},React.createElement('span',null,'Better when'),seg('dir',[['up','Higher'],['down','Lower'],['target','On target']])),
-      React.createElement('div',{className:'sce-f'},React.createElement('span',null,'Counted as'),seg('agg',[['cum','Adds up in the month'],['snap','A rate or level']])),
-      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Goal (optional)'),React.createElement('input',{className:'inp',value:f.goal,placeholder:'e.g. 15',onChange:e=>up('goal',e.target.value)}))),
-    React.createElement('div',{className:'sce-new-f'},
-      React.createElement('span',{className:'tiny muted'},'Readings are entered in the Business Review each week. This objective reads them from there.'),
-      React.createElement('span',{style:{display:'inline-flex',gap:8,flexShrink:0}},
-        React.createElement('button',{type:'button',className:'btn sm',onClick:onCancel},'Cancel'),
-        React.createElement('button',{type:'button',className:'btn sm primary',disabled:!ok,onClick:create},'Create metric'))));
-}
+/* The criteria editor. A criterion is picked from the Business Review, or made there through the review's
+   own New metric form (entered or worked out by a formula) - one creator, the same in both places.
+   A criterion written as free text before metrics existed still shows its words until a metric is picked. */
 function ScEditor({items,onChange}){
   const W=useWbr(); const PMx=usePerms(); const canNew=PMx.can('metric.create').allow;
   const [newAt,setNewAt]=useState(null);
   const list=(items||[]).map(c=> typeof c==='string'?{id:'',text:c}:c);
+  const used=list.map(c=>c.metricId).filter(Boolean);
   const opts=useMemo(()=>(W.metrics||[]).filter(m=>!m.archived).map(m=>({id:m.id,label:m.name,sub:(W.secMap[m.sec]||{}).label||m.sec})),[W.metrics,W.secMap]);
   const set=(i,patch)=>{ const n=[...list]; n[i]=Object.assign({},n[i],patch); onChange(n); };
+  const drop=(i)=>onChange(list.filter((_,j)=>j!==i));
   return React.createElement('div',null,
-    list.map((c,i)=>{ const m=scMetricOf(c,W);
+    list.map((c,i)=>{ const m=scMetricOf(c,W); const old=!m? scRaw(c) : '';
+      const goal=m&&m.goalDefault!=null? wbrFmtV(m.goalDefault,m.fmt) : '';
       return React.createElement('div',{key:c.id||i,className:'sce'},
-        React.createElement('div',{className:'sce-top'},
-          React.createElement('textarea',{className:'inp sce-t',rows:Math.min(4,Math.max(1,Math.ceil(String(c.text||'').length/74))),value:c.text,placeholder:'What does success look like?',onChange:e=>set(i,{text:e.target.value.replace(/\n/g,' ')})}),
-          React.createElement('button',{type:'button',className:'btn icon',title:'Remove criterion',onClick:()=>{ setNewAt(null); onChange(list.filter((_,j)=>j!==i)); }},'\u00d7')),
-        m? React.createElement('div',{className:'sce-link'},
+        m? React.createElement('div',{className:'sce-top'},
             React.createElement('span',{className:'sce-chip',title:m.name+' \u00b7 '+((W.secMap[m.sec]||{}).label||m.sec)},
               React.createElement(Icon,{name:'trending-up',size:13}),
               React.createElement('span',{className:'sce-chip-n'},m.name),
-              React.createElement('span',{className:'sce-chip-s'},(W.secMap[m.sec]||{}).label||m.sec),
-              React.createElement('button',{type:'button',className:'sce-chip-x',title:'Stop tracking with this metric',onClick:()=>set(i,{metricId:''})},'\u00d7')))
-          : (newAt===i? React.createElement(ScNewMetric,{W,seed:c.text,onCancel:()=>setNewAt(null),onCreate:(mm)=>{ set(i,{metricId:mm.id}); setNewAt(null); }})
-            : React.createElement('div',{className:'sce-link'},
-                React.createElement('div',{className:'sce-pick'},React.createElement(SearchSelect,{options:opts,value:'',onChange:v=>{ if(v) set(i,{metricId:v}); },placeholder:opts.length?'Track with a Business Review metric\u2026':'No metrics yet - make one'})),
-                canNew? React.createElement('button',{type:'button',className:'btn sm',style:{flexShrink:0,whiteSpace:'nowrap'},onClick:()=>setNewAt(i)},'+ New metric') : null)));
+              React.createElement('span',{className:'sce-chip-s'},((W.secMap[m.sec]||{}).label||m.sec)+(goal?' \u00b7 goal '+goal:'')+(wbrIsComputed(m)?' \u00b7 formula':''))),
+            React.createElement('button',{type:'button',className:'btn sm ghost',style:{flexShrink:0,whiteSpace:'nowrap'},onClick:()=>set(i,{metricId:''})},'Change'),
+            React.createElement('button',{type:'button',className:'btn icon',title:'Remove criterion',onClick:()=>drop(i)},'\u00d7'))
+          : React.createElement(React.Fragment,null,
+            old? React.createElement('div',{className:'sce-old',title:old},React.createElement('span',{className:'klabel'},'Written before metrics'),' ',old) : null,
+            React.createElement('div',{className:'sce-top'},
+              React.createElement('div',{className:'sce-pick'},React.createElement(SearchSelect,{options:opts.filter(o=>used.indexOf(o.id)<0),value:'',onChange:v=>{ if(v) set(i,{metricId:v}); },placeholder:opts.length?'Pick a Business Review metric\u2026':'No metrics yet - make the first one'})),
+              canNew? React.createElement('button',{type:'button',className:'btn sm',style:{flexShrink:0,whiteSpace:'nowrap'},onClick:()=>setNewAt(i)},'+ New metric') : null,
+              React.createElement('button',{type:'button',className:'btn icon',title:'Remove criterion',onClick:()=>drop(i)},'\u00d7'))));
     }),
-    React.createElement('button',{type:'button',className:'btn sm ghost',onClick:()=>onChange([...list,{id:uid('sc'),text:'',metricId:''}])},'+ Add success criterion'));
+    React.createElement('button',{type:'button',className:'btn sm ghost',onClick:()=>onChange([...list,{id:uid('sc'),text:'',metricId:''}])},'+ Add success criterion'),
+    newAt!=null? React.createElement(WbrNewMetricModal,{W,onClose:()=>setNewAt(null),onCreated:(id)=>{ set(newAt,{metricId:id}); setNewAt(null); }}) : null);
 }
 /* Completing an objective: record where each criterion landed and a note on the outcome. */
 function OkrCompleteModal({okr,onClose,onSave}){
@@ -3159,7 +3137,7 @@ function OkrCompleteModal({okr,onClose,onSave}){
     footer:[React.createElement('button',{key:'c',className:'btn',onClick:onClose},'Cancel'), React.createElement('button',{key:'s',className:'btn primary',disabled:!note.trim(),onClick:()=>onSave({status,completionNote:note.trim(),successCriteria:crit,doneAt:nowISO()})}, status==='done'?'Mark complete':'Mark abandoned')]},
     React.createElement('div',{style:{fontWeight:700,marginBottom:10}}, okr.theme||okr.objective),
     React.createElement(Field,{label:'Outcome'}, React.createElement('div',{className:'seg'}, React.createElement('button',{className:status==='done'?'on':'',onClick:()=>setStatus('done')},'Achieved'), React.createElement('button',{className:status==='abandoned'?'on':'',onClick:()=>setStatus('abandoned')},'Abandoned'))),
-    crit.length? React.createElement(Field,{label:'Where each success criterion landed'}, crit.map((c,i)=>React.createElement('div',{key:c.id||i,style:{display:'flex',gap:10,alignItems:'center',marginBottom:6}}, React.createElement('div',{style:{flex:1,fontSize:13}},c.text), React.createElement('span',{className:'tiny muted'},'target '+(c.target||'-')), React.createElement('input',{className:'inp',style:{width:110},placeholder:'result',value:c.now||'',onChange:e=>up(i,e.target.value)})))) : null,
+    crit.length? React.createElement(Field,{label:'Where each success criterion landed'}, crit.map((c,i)=>React.createElement('div',{key:c.id||i,style:{display:'flex',gap:10,alignItems:'center',marginBottom:6}}, React.createElement('div',{style:{flex:1,fontSize:13}},scText(c)), React.createElement('span',{className:'tiny muted'},'target '+(c.target||'-')), React.createElement('input',{className:'inp',style:{width:110},placeholder:'result',value:c.now||'',onChange:e=>up(i,e.target.value)})))) : null,
     React.createElement(Field,{label:'Completion note'}, React.createElement('textarea',{className:'inp',rows:4,value:note,placeholder:'What was achieved, what was not, and what it means for what comes next.',onChange:e=>setNote(e.target.value)})));
 }
 function OkrForm({initial,onSave,onClose,people}){
@@ -3168,7 +3146,7 @@ function OkrForm({initial,onSave,onClose,people}){
   const valid=f.objective.trim().length>0 && f.theme.trim().length>0;
   return React.createElement(Modal,{title:initial&&initial.id?'Edit objective':'New objective',onClose,wide:true,
     footer:[React.createElement('button',{key:'c',className:'btn',onClick:onClose},'Cancel'),
-      React.createElement('button',{key:'s',className:'btn primary',disabled:!valid,onClick:()=>{onSave({...f,num:Number(f.num)||f.num});onClose();}}, initial&&initial.id?'Save changes':'Create objective')]},
+      React.createElement('button',{key:'s',className:'btn primary',disabled:!valid,onClick:()=>{onSave({...f,successCriteria:(f.successCriteria||[]).filter(c=>typeof c==='string'? c.trim() : (c&&(c.metricId||String(c.text||'').trim()))),num:Number(f.num)||f.num});onClose();}}, initial&&initial.id?'Save changes':'Create objective')]},
     React.createElement('div',{className:'f-row'},
       React.createElement('div',{style:{flex:2.6,minWidth:0}}, React.createElement(Field,{label:'Objective name',hint:'short - shown as the title'}, React.createElement('input',{className:'inp',value:f.theme,placeholder:'e.g. Outbound Pilot',onChange:e=>up('theme',e.target.value)}))),
       React.createElement('div',{style:{flex:1,minWidth:170}}, React.createElement(Field,{label:'Completion date',hint:'the day this objective should be complete'}, React.createElement('input',{className:'inp',type:'date',value:okrDueISO(f.timeframe),onChange:e=>up('timeframe',e.target.value)})))),
@@ -5360,7 +5338,7 @@ function cirriSnapshot(g, H, PM, W, opts){
       repliesAsked:rs.asked, repliesAnswered:rs.answered, medianReplyHours: rs.medianHours==null? null : Math.round(rs.medianHours*10)/10, unansweredOver48h:rs.open.length}; });
   /* objectives */
   const okrOut=okrs.map(o=>{ const ps=projOut.filter(p=>(p.objectiveIds||[]).includes(o.id)); const crit=(o.successCriteria||[]); const covered=new Set(); tasks.forEach(t=>(t.criteriaIds||[]).forEach(c=>covered.add(c))); projects.forEach(p=>(p.criteriaIds||[]).forEach(c=>covered.add(c)));
-    return {id:o.id, name:o.theme||o.name||o.title||'', statement:String(o.objective||'').slice(0,300), ownerId:o.ownerId||'', timeframe:okrDueISO(o.timeframe)||o.timeframe||'', status:o.archived?'archived':(o.status||'active'), doneAt:o.doneAt||'', completionNote:String(o.completionNote||'').slice(0,400), health:o.health||'', criteria:crit.map(c=>({id:c.id,text:c.text,metricId:c.metricId||'',start:c.start||'',now:c.now||'',target:c.target||'',covered:covered.has(c.id)})), projectIds:ps.map(p=>p.id), activeProjects:ps.filter(p=>p.queue==='active').length, doneProjects:ps.filter(p=>p.queue==='closed').length}; });
+    return {id:o.id, name:o.theme||o.name||o.title||'', statement:String(o.objective||'').slice(0,300), ownerId:o.ownerId||'', timeframe:okrDueISO(o.timeframe)||o.timeframe||'', status:o.archived?'archived':(o.status||'active'), doneAt:o.doneAt||'', completionNote:String(o.completionNote||'').slice(0,400), health:o.health||'', criteria:crit.map(c=>({id:c.id,text:scText(c),metricId:c.metricId||'',start:c.start||'',now:c.now||'',target:c.target||'',covered:covered.has(c.id)})), projectIds:ps.map(p=>p.id), activeProjects:ps.filter(p=>p.queue==='active').length, doneProjects:ps.filter(p=>p.queue==='closed').length}; });
   const changes=(opts.hcHistory||[]).slice().sort((a,b)=>String(b.effectiveDate||'').localeCompare(String(a.effectiveDate||''))).slice(0,60).map(h=>({when:h.effectiveDate,type:h.type,name:h.name,role:h.role||h.title||'',org:lbl[h.leaderId]||''}));
   const departures=(opts.attrition||[]).slice().sort((a,b)=>String(b.exitDate||'').localeCompare(String(a.exitDate||''))).slice(0,40).map(a=>({when:a.exitDate,name:a.name,role:a.role||'',org:lbl[a.leaderId]||'',type:a.attritionType||'',reason:String(a.reason||'').slice(0,160)}));
   /* metrics: latest reading and goal; judgement of on/off plan is left to the reader for now */
