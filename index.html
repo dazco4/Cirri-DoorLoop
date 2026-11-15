@@ -1135,7 +1135,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-15-0855';
+const BUILD='2026-11-15-0920';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -11801,6 +11801,7 @@ function cuPlan(file, ctx){
     else if(cuHas(o,'lead') && lead && lead!==(prev.kev||'')){ const rec=Object.assign({},prev,{kev:lead}); R.orgs.change.push({prev, next:rec, changes:[{k:'lead',from:prev.kev||'none',to:lead}]}); }
   });
   const orgRef=(ref)=>{ const l=orgByName[cuLc(ref)]; return l? l.id : null; };
+  R.orgs.remove=[]; const wantRemove=(Array.isArray(file.removeOrgs)?file.removeOrgs:[]).map(n=>({n,l:orgByName[cuLc(n)]}));
 
   /* ---- 3. people ---- */
   const levelOf=(v)=>{ if(v==null||v==='') return null; if(typeof v==='number'||/^\d+$/.test(String(v).trim())){ const n=parseInt(v,10); return (!levels.length||levels.some(l=>Number(l.n)===n))? n : null; }
@@ -11850,6 +11851,7 @@ function cuPlan(file, ctx){
     const was=hcStatus(prev), now=hcStatus(next);
     const item={prev, next, changes};
     if(was==='active' && now==='departed'){ item.exit={attritionType:next.attritionType||'', exitDate:next.exitDate||R.asOf, reason:next.exitReason||''}; R.people.departs.push(item); }
+    else if(file.corrections===true) R.people.edits.push(item);   /* fixing the record, not a promotion or transfer: no history entry */
     else if(now==='active' && (Number(next.level)||0)>(Number(prev.level)||0)) { item.kind='promotion'; R.people.moves.push(item); }
     else if(now==='active' && (prev.leaderId!==next.leaderId || (prev.managerId||'')!==(next.managerId||''))) { item.kind='transfer'; R.people.moves.push(item); }
     else R.people.edits.push(item);
@@ -11864,6 +11866,10 @@ function cuPlan(file, ctx){
   emps.forEach(e=>{ if(hcStatus(e)!=='active' || e.aboveRoster || !(scopeAll || scope[e.leaderId])) return;
     if(!matched.some(m=>m.prev&&m.prev.id===e.id)) R.people.missing.push(e); });
   R.empAfter=Object.keys(after).map(k=>after[k]);
+  /* removeOrgs: an org goes only when, after this file, no record of any status still sits in it */
+  wantRemove.forEach(x=>{ if(!x.l){ R.warnings.push('removeOrgs: org "'+x.n+'" does not exist.'); return; }
+    const left=R.empAfter.filter(e=>e.leaderId===x.l.id).length;
+    if(left) R.errors.push('removeOrgs: '+left+' record'+(left===1?' is':'s are')+' still in '+x.l.label+'. Move them in this file first.'); else R.orgs.remove.push(x.l); });
 
   /* ---- 4. Business Review: sections and metrics ---- */
   const S=ctx.wbrS; const secs=(S.sections||[]).slice();
@@ -11963,7 +11969,7 @@ function cuPlan(file, ctx){
 }
 function cuCounts(R){
   const p=R.people;
-  return {people:p.hires.length+p.moves.length+p.departs.length+p.edits.length, orgs:R.orgs.add.length+R.orgs.change.length,
+  return {people:p.hires.length+p.moves.length+p.departs.length+p.edits.length, orgs:R.orgs.add.length+R.orgs.change.length+((R.orgs.remove||[]).length),
     metrics:R.metrics.add.length+R.metrics.change.length+R.sections.add.length, readings:R.readings.add.length+R.readings.change.length, plan:R.plan.cells.length};
 }
 function cuNothing(R){ const c=cuCounts(R); return !c.people&&!c.orgs&&!c.metrics&&!c.readings&&!c.plan; }
@@ -11977,6 +11983,8 @@ function cuTemplate(st, emps, leaders, S){
     _help:{
       rule:'Merge, never replace. Leave a field out and it stays as it is. Leave a section out and nothing in it changes.',
       people:'Matched by work email (then employeeId). New email = new hire. Higher level = promotion; new org or manager = transfer; status departed = departure.',
+      corrections:'Optional. true when the file fixes how records were entered rather than reporting what happened: org, manager and level changes are saved as plain edits, with no promotion or transfer added to anyone\u2019s history.',
+      removeOrgs:'Optional. Org names to remove. An org is removed only if, after this file, nobody is left in it.',
       rosterScope:'Optional. The orgs this file lists completely, or "all". Active people in those orgs who are missing from the file are flagged for review, never removed.',
       people_fields:CU_PEOPLE_KEYS.join(', ')+'. level: a number or a ladder name. manager: an email. org: an org name. base, variable (at target) and bonus (target): annual, in the person\u2019s currency; OTE is worked out from them. ote alone only for someone without them. cost: up to three {bucket, pct, tag, channel} adding to 100.',
       metrics:'Create or change a metric. Matched by id, then name within section. fmt: number|currency|percent|days|hours|seconds|months|score|ratio. cad: '+WBR_CAD_ORDER.join('|')+'. agg: cumulative|rate. dir: up|down|target. band: % tolerance. goal: standing goal. owner: email.',
@@ -12043,8 +12051,8 @@ function CuPreview({R, ctx, onApply, onClose, busy}){
     React.createElement(CuGroup,{title:'In these orgs but not in the file',count:R.people.missing.length,open:true},
       React.createElement('div',{className:'tiny muted',style:{marginBottom:6}},'Nothing happens to them. If they have left, mark them departed in the file or in People.'),
       React.createElement(CuList,{items:R.people.missing,render:e=>[head(e.name),' ',e.title||'',' \u00b7 ',lbl[e.leaderId]||'']})),
-    React.createElement(CuGroup,{title:'Orgs',count:R.orgs.add.length+R.orgs.change.length},
-      React.createElement(CuList,{items:R.orgs.add.map(o=>({t:'New',o})).concat(R.orgs.change.map(x=>({t:'Lead',o:x.next,x}))),render:r=>[head(r.o.label),' ',r.t==='New'?('new org'+(r.o.kev?', led by '+r.o.kev:'')):('lead '+r.x.changes[0].from+' \u2192 '+r.x.changes[0].to)]})),
+    React.createElement(CuGroup,{title:'Orgs',count:R.orgs.add.length+R.orgs.change.length+((R.orgs.remove||[]).length)},
+      React.createElement(CuList,{items:R.orgs.add.map(o=>({t:'New',o})).concat(R.orgs.change.map(x=>({t:'Lead',o:x.next,x}))).concat((R.orgs.remove||[]).map(o=>({t:'Remove',o}))),render:r=>[head(r.o.label),' ',r.t==='New'?('new org'+(r.o.kev?', led by '+r.o.kev:'')):(r.t==='Remove'?'removed - nobody is left in it':('lead '+r.x.changes[0].from+' \u2192 '+r.x.changes[0].to))]})),
     React.createElement(CuGroup,{title:'Business Review sections',count:R.sections.add.length},
       React.createElement(CuList,{items:R.sections.add,render:s=>[head(s.label),' new section']})),
     React.createElement(CuGroup,{title:'New metrics',count:R.metrics.add.length},
@@ -12087,6 +12095,7 @@ function CuUpdateCard(){
       R.people.moves.forEach(it=>H2.moveEmp(it.prev, it.next, it.kind, {effectiveDate:R.asOf, note}));
       R.people.departs.forEach(it=>H2.attritEmp(it.next, it.exit));
       R.people.edits.forEach(it=>H2.writeEmp(it.next));
+      if((R.orgs.remove||[]).length){ await new Promise(r=>setTimeout(r,600)); const H3=Hr.current; R.orgs.remove.forEach(o=>H3.deleteLeader(o.id)); }
       if(store.syncGrantsNow && cuCounts(R).people) store.syncGrantsNow({hc_employees:R.empAfter.map(e=>splitEmpComp(e).rest)});
       const mOut=Object.keys(R.metricOut).map(id=>({coll:'wbr_metrics', obj:R.metricOut[id]}));
       const eOut=R.readings.add.concat(R.readings.change).map(r=>({coll:'wbr_entries', obj:r.next}));
