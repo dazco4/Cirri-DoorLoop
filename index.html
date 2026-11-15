@@ -1048,6 +1048,34 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .cu-name{font-weight:700}
 .cu-ch{display:inline-block;margin:0 10px 0 0;color:var(--ink-2)}
 .cu-ch b{font-weight:700;color:var(--ink)}
+.sc-m{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;cursor:pointer;padding:1px 7px 1px 5px;border-radius:7px;border:1px solid transparent;position:relative;margin-top:1px}
+.sc-m:hover{background:#f2f6fa;border-color:var(--line)}
+.sc-mv{font-weight:800;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sc-spark{flex:0 0 auto;display:block}
+.sct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sct-card{min-width:0}
+.sct-crit{font-weight:700;font-size:13px;line-height:1.4;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.sct-sub{display:flex;align-items:center;gap:8px;margin-top:3px;min-width:0}
+.sct-mn{font-size:12px;color:var(--ink-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sce{margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.sce:last-of-type{border-bottom:0}
+.sce-top{display:flex;gap:8px}
+.sce-link{display:flex;gap:8px;align-items:center;margin-top:6px;min-width:0}
+.sce-pick{flex:1;min-width:0}
+.sce-chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;min-width:0;background:#f2f6fa;border:1px solid var(--line);border-radius:8px;padding:4px 6px 4px 9px;font-size:12.5px;color:var(--ink)}
+.sce-chip-n{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sce-chip-s{color:var(--ink-2);font-size:11.5px;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sce-chip-x{border:0;background:none;cursor:pointer;color:var(--ink-2);font-size:15px;line-height:1;padding:0 3px;flex:0 0 auto}
+.sce-chip-x:hover{color:var(--ink)}
+.sce-new{margin-top:8px;background:#f6f9fb;border:1px solid var(--line);border-radius:10px;padding:12px}
+.sce-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.sce-f{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.sce-f.wide{grid-column:1 / -1}
+.sce-f .seg{align-self:flex-start;flex-wrap:wrap}
+.sce-new-f{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+@media (max-width:640px){.sce-grid{grid-template-columns:1fr}}
+.sce-t{resize:none;min-height:0;line-height:1.45;overflow:hidden}
+.sce-top .btn.icon{align-self:flex-start}
 </style>
 </head>
 <body>
@@ -1107,7 +1135,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-11-1638';
+const BUILD='2026-11-15-0855';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -1219,6 +1247,12 @@ function normSc(o){ return (o.successCriteria||[]).map((c,i)=>{ if(c&&typeof c==
    "2026", "2026 H1", "Q3 2026", "Aug 2026", "Dec 31", "December 31st - 2026", "2026-2028", "12/31/2026" */
 function parseTimeframe(tf, createdAt){
   let s=String(tf||'').trim().toLowerCase(); if(!s) return null;
+  /* a completion date picked from the calendar: read as a local date, never through UTC */
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(iso){ const end=new Date(+iso[1],+iso[2]-1,+iso[3]); if(isNaN(end)) return null;
+    let a=null; if(createdAt){ const c=new Date(createdAt); if(!isNaN(c)&&c<end) a=c; }
+    if(!a) a=new Date(end.getFullYear(),0,1); if(a>=end) a=new Date(end.getFullYear()-1,0,1);
+    return {a,b:end}; }
   s=s.replace(/,/g,' ').replace(/(\d+)(st|nd|rd|th)\b/g,'$1').replace(/\s*[-\u2013\u2014]\s*/g,' - ').replace(/\s+/g,' ').trim();
   const MO='jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
   const mi=(w)=>MO.indexOf(String(w).slice(0,3));
@@ -1242,10 +1276,17 @@ function parseTimeframe(tf, createdAt){
   if(a>=end) return null;
   return {a,b:end};
 }
+/* An objective's completion date. New objectives store the picked date (YYYY-MM-DD). Older ones hold free
+   text ("2026", "Q3 2026"); those read as the last day of the window they name, and anything unreadable
+   stays as written. Nothing is rewritten until somebody picks a date. */
+function okrDueISO(tf){ const t=String(tf||'').trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const r=parseTimeframe(t); if(!r) return ''; const d=r.b;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function okrDueLabel(tf){ const i=okrDueISO(tf); return i? fmtDate(i) : String(tf||''); }
 function timeRemainingLabel(tf){
   const r=parseTimeframe(tf); if(!r) return null;
   const days=Math.ceil((r.b-new Date())/86400000);
-  if(days<0) return 'target passed';
+  if(days<0) return 'past due';
   if(days===0) return 'due today';
   const mo=Math.floor(days/30), d=days%30;
   return ((mo?mo+' mo ':'')+(d?d+' days ':'')).trim()+' left';
@@ -2514,7 +2555,7 @@ function useGtm(){
   const PROJ_AFIELDS=[['name','name'],['ownerId','owner'],['status','status'],['health','health'],['queue','queue'],['dueDate','due date'],['effort','LOE'],['impact','impact'],['okrIds','objectives'],['scIds','success criteria'],['details','description'],['docUrl','doc link'],['blocker','blocker'],['completionNote','completion note']];
   const TASK_AFIELDS=[['title','title'],['ownerIds','owners'],['status','status'],['dueDate','due date'],['projectIds','projects'],['blocker','blocker'],['completionNote','completion note']];
   const OKR_STATUS_LABEL={active:'Active',done:'Completed',abandoned:'Abandoned'};
-const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId','owner'],['timeframe','timeframe'],['archived','archived']];
+const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId','owner'],['timeframe','completion date'],['archived','archived']];
   const scDiff=(a,b)=>{
     const out=[]; const am={}; (a||[]).forEach(c=>{ if(c&&c.id) am[c.id]=c; });
     const seen=new Set(); const S=(v)=>v==null?'':String(v);
@@ -2981,6 +3022,49 @@ function TaskForm({initial, onSave, onClose, people, projects, lockProject}){
   );
 }
 
+/* ============================================================
+   SUCCESS CRITERIA AND THE BUSINESS REVIEW
+   A criterion can be tracked by one Business Review metric (criterion.metricId). The link lives on the
+   criterion and nowhere else. Its current value and its trend are READ from the metric's readings through
+   W.read - nothing about the number is ever typed on the objective, so the objective and the review can
+   never disagree. A metric made from the objective form is an ordinary Business Review metric.
+   ============================================================ */
+function scMetricOf(c, W){ const m=c&&c.metricId&&W&&W.metricMap? W.metricMap[c.metricId] : null; return (m&&!m.archived)? m : null; }
+/* one point per checkpoint, read the same way the dashboard reads it: a month-to-date total is shown at
+   its pace so an early-month reading is not mistaken for a drop */
+function scTrend(W, m, cap){
+  const pts=[];
+  (W.timeline||[]).forEach(t=>{ const p=wbrPeriodOf(W.periods,t.pk,W.S); const wk=(p.weeks||[]).find(w=>w.id===t.wk); if(!wk) return;
+    const ctxs=wbrCtxMap(p,wk,W.periods,W.S); const r=W.read(m,t.pk,t.wk,ctxs[m.cad]||ctxs.MTD);
+    pts.push({date:t.date,label:wbrMonthShort(t.pk)+' '+t.label,actual:r.value,pace:(r.pace!=null?r.pace:r.value),pct:r.pct,goal:r.goal,tone:r.tone,note:r.note}); });
+  const a=pts.findIndex(p=>p.pace!=null); if(a<0) return {pts:[],last:null};
+  let b=pts.length-1; while(b>a&&pts[b].pace==null) b--;
+  let cut=pts.slice(a,b+1); if(cap&&cut.length>cap) cut=cut.slice(cut.length-cap);
+  const withVal=cut.filter(p=>p.pace!=null);
+  return {pts:cut,last:withVal[withVal.length-1]||null};
+}
+function ScSpark({pts}){
+  const vs=(pts||[]).map(p=>p.pace).filter(v=>v!=null); if(vs.length<2) return null;
+  const Wd=64,Ht=20,pad=2.5; const mn=Math.min.apply(null,vs), mx=Math.max.apply(null,vs); const span=(mx-mn)||1;
+  const xy=vs.map((v,i)=>[pad+i*(Wd-2*pad)/(vs.length-1), Ht-pad-(v-mn)*(Ht-2*pad)/span]);
+  const last=xy[xy.length-1];
+  return React.createElement('svg',{className:'sc-spark',width:Wd,height:Ht,viewBox:'0 0 '+Wd+' '+Ht,'aria-hidden':true},
+    React.createElement('polyline',{points:xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' '),fill:'none',stroke:'var(--accent-700)',strokeWidth:1.6,strokeLinejoin:'round',strokeLinecap:'round'}),
+    React.createElement('circle',{cx:last[0],cy:last[1],r:2.4,fill:'var(--deep)'}));
+}
+/* the value beside a tracked criterion: sparkline, latest reading, on/off plan dot. Opens the metric. */
+function ScMetricBadge({c}){
+  const W=useWbr(); const nav=useNav();
+  const m=scMetricOf(c,W);
+  const tr=useMemo(()=>m? scTrend(W,m,14) : null,[m,W.timeline,W.resolver,W.periods]);
+  if(!m) return null;
+  const last=tr&&tr.last;
+  const tip=m.name+(last? ' \u00b7 as of '+fmtDateShort(last.date)+(last.goal!=null?' \u00b7 goal '+wbrFmtV(last.goal,m.fmt):'') : ' \u00b7 no readings yet - open the metric to add one');
+  return React.createElement('span',{className:'sc-m','data-tip':tip,onClick:(e)=>{ e.stopPropagation(); nav.openMetric(m.id); }},
+    React.createElement(ScSpark,{pts:tr?tr.pts:[]}),
+    React.createElement('span',{className:'sc-mv'}, last? wbrFmtV(last.pace,m.fmt) : '\u2014'),
+    last&&last.pct!=null? React.createElement(WbrDot,{tone:last.tone}) : null);
+}
 function ScLine({c, ps}){
   const driving=ps.filter(p=>(p.scIds||[]).includes(c.id));
   const openDriving=driving.filter(p=>!isClosedStatus(p.status));
@@ -2989,21 +3073,87 @@ function ScLine({c, ps}){
     React.createElement('div',{className:'sc-line-top'},
       React.createElement('span',{className:'sc-flag'+(uncovered?' warn':''),title:uncovered?'No open project drives this criterion':''}),
       React.createElement('span',{className:'sc-text'}, scText(c)),
+      c&&c.metricId? React.createElement(ScMetricBadge,{c}) : null,
       uncovered&&React.createElement('span',{className:'pill-s s-amber',style:{fontSize:10,padding:'1px 7px',flexShrink:0}},'no work'),
       !uncovered&&driving.length>0&&React.createElement('span',{className:'pill-s s-grey',style:{fontSize:10,padding:'1px 7px',flexShrink:0},title:driving.length+' linked project'+(driving.length===1?'':'s')+' drive this'},driving.length+' proj')));
 }
+/* How each tracked criterion is trending: one chart per criterion, its own scale, goal dashed behind it. */
+function OkrTrends({okr}){
+  const W=useWbr(); const nav=useNav();
+  const rows=useMemo(()=>(okr.successCriteria||[]).map(c=>{ const m=scMetricOf(c,W); return m? {c,m,tr:scTrend(W,m,26)} : null; }).filter(Boolean),[okr.successCriteria,W.metricMap,W.timeline,W.resolver,W.periods]);
+  if(!rows.length) return null;
+  return React.createElement('div',{style:{marginBottom:18}},
+    React.createElement('div',{className:'section-title'},'Trend',
+      React.createElement('span',{className:'fhint','data-tip':'Each tracked success criterion over time, read from the Business Review. A month-to-date total is drawn at its pace. Dashed line is the goal.'},React.createElement(Icon,{name:'info',size:13}))),
+    React.createElement('div',{className:'sct-grid'}, rows.map(({c,m,tr})=>React.createElement('div',{key:c.id,className:'wbr-card sct-card'},
+      React.createElement('div',{className:'sct-crit',title:scText(c)}, scText(c)),
+      React.createElement('div',{className:'sct-sub'},
+        React.createElement('span',{className:'tlink sct-mn',title:m.name,onClick:()=>nav.openMetric(m.id)},m.name),
+        React.createElement(WbrCad,{cad:m.cad})),
+      React.createElement('div',{className:'wbr-card-s'},
+        React.createElement('span',{className:'big'}, tr.last? wbrFmtV(tr.last.pace,m.fmt) : '\u2014'),
+        tr.last? React.createElement('span',{className:'tiny muted',style:{whiteSpace:'nowrap'}},'as of '+fmtDateShort(tr.last.date)) : null,
+        tr.last&&tr.last.pct!=null? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}},React.createElement(WbrDot,{tone:tr.last.tone}), wbrTrim(tr.last.pct,1)+'% to plan'):null),
+      tr.pts.length? React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380,
+          lines:[{vals:tr.pts.map(p=>p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]})
+        : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.')))));
+}
+/* A new Business Review metric, made from the objective form. It is a real metric: it appears in the review. */
+function ScNewMetric({W, seed, onCancel, onCreate}){
+  const secs=(W.S.sections||[]);
+  const [f,setF]=useState({name:String(seed||'').trim().slice(0,80), sec:(secs.find(x=>x.id!=='finance')||secs[0]||{}).id||'', fmt:'num', dir:'up', agg:'cum', goal:''});
+  const up=(k,v)=>setF(x=>Object.assign({},x,{[k]:v}));
+  const fmtLbl=(k)=>{ const v=WBR_FMT[k]; return typeof v==='string'? v : ((v&&(v.label||v.full))||k); };
+  const seg=(k,opts)=>React.createElement('div',{className:'seg sm'}, opts.map(o=>React.createElement('button',{key:o[0],type:'button',className:f[k]===o[0]?'on':'',onClick:()=>up(k,o[0])},o[1])));
+  const ok=f.name.trim().length>0 && !!f.sec;
+  const create=()=>{ if(!ok) return; const g=f.goal===''? null : wbrParseVal(f.goal);
+    const out=W.A.writeMetric(Object.assign(wbrBlankMetric(f.sec),{name:f.name.trim(),fmt:f.fmt,dir:f.dir,agg:f.agg,cad:'MTD',goalDefault:g,def:String(seed||'').trim()}));
+    onCreate(out); };
+  return React.createElement('div',{className:'sce-new'},
+    React.createElement('div',{className:'klabel',style:{marginBottom:8}},'New Business Review metric'),
+    React.createElement('div',{className:'sce-grid'},
+      React.createElement('label',{className:'sce-f wide'},React.createElement('span',null,'Name'),React.createElement('input',{className:'inp',value:f.name,autoFocus:true,placeholder:'e.g. Outbound payback (months)',onChange:e=>up('name',e.target.value)})),
+      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Section'),React.createElement('select',{className:'inp',value:f.sec,onChange:e=>up('sec',e.target.value)},secs.map(x=>React.createElement('option',{key:x.id,value:x.id},x.label||x.id)))),
+      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Unit'),React.createElement('select',{className:'inp',value:f.fmt,onChange:e=>up('fmt',e.target.value)},Object.keys(WBR_FMT).map(k=>React.createElement('option',{key:k,value:k},fmtLbl(k))))),
+      React.createElement('div',{className:'sce-f'},React.createElement('span',null,'Better when'),seg('dir',[['up','Higher'],['down','Lower'],['target','On target']])),
+      React.createElement('div',{className:'sce-f'},React.createElement('span',null,'Counted as'),seg('agg',[['cum','Adds up in the month'],['snap','A rate or level']])),
+      React.createElement('label',{className:'sce-f'},React.createElement('span',null,'Goal (optional)'),React.createElement('input',{className:'inp',value:f.goal,placeholder:'e.g. 15',onChange:e=>up('goal',e.target.value)}))),
+    React.createElement('div',{className:'sce-new-f'},
+      React.createElement('span',{className:'tiny muted'},'Readings are entered in the Business Review each week. This objective reads them from there.'),
+      React.createElement('span',{style:{display:'inline-flex',gap:8,flexShrink:0}},
+        React.createElement('button',{type:'button',className:'btn sm',onClick:onCancel},'Cancel'),
+        React.createElement('button',{type:'button',className:'btn sm primary',disabled:!ok,onClick:create},'Create metric'))));
+}
 function ScEditor({items,onChange}){
+  const W=useWbr(); const PMx=usePerms(); const canNew=PMx.can('metric.create').allow;
+  const [newAt,setNewAt]=useState(null);
   const list=(items||[]).map(c=> typeof c==='string'?{id:'',text:c}:c);
+  const opts=useMemo(()=>(W.metrics||[]).filter(m=>!m.archived).map(m=>({id:m.id,label:m.name,sub:(W.secMap[m.sec]||{}).label||m.sec})),[W.metrics,W.secMap]);
+  const set=(i,patch)=>{ const n=[...list]; n[i]=Object.assign({},n[i],patch); onChange(n); };
   return React.createElement('div',null,
-    list.map((c,i)=>React.createElement('div',{key:c.id||i,style:{display:'flex',gap:8,marginBottom:6}},
-      React.createElement('input',{className:'inp',value:c.text,placeholder:'What does success look like?',onChange:e=>{const n=[...list];n[i]={...n[i],text:e.target.value};onChange(n);}}),
-      React.createElement('button',{className:'btn icon',title:'Remove criterion',onClick:()=>onChange(list.filter((_,j)=>j!==i))},'\u00d7'))),
-    React.createElement('button',{className:'btn sm ghost',onClick:()=>onChange([...list,{id:uid('sc'),text:''}])},'+ Add success criterion'));
+    list.map((c,i)=>{ const m=scMetricOf(c,W);
+      return React.createElement('div',{key:c.id||i,className:'sce'},
+        React.createElement('div',{className:'sce-top'},
+          React.createElement('textarea',{className:'inp sce-t',rows:Math.min(4,Math.max(1,Math.ceil(String(c.text||'').length/74))),value:c.text,placeholder:'What does success look like?',onChange:e=>set(i,{text:e.target.value.replace(/\n/g,' ')})}),
+          React.createElement('button',{type:'button',className:'btn icon',title:'Remove criterion',onClick:()=>{ setNewAt(null); onChange(list.filter((_,j)=>j!==i)); }},'\u00d7')),
+        m? React.createElement('div',{className:'sce-link'},
+            React.createElement('span',{className:'sce-chip',title:m.name+' \u00b7 '+((W.secMap[m.sec]||{}).label||m.sec)},
+              React.createElement(Icon,{name:'trending-up',size:13}),
+              React.createElement('span',{className:'sce-chip-n'},m.name),
+              React.createElement('span',{className:'sce-chip-s'},(W.secMap[m.sec]||{}).label||m.sec),
+              React.createElement('button',{type:'button',className:'sce-chip-x',title:'Stop tracking with this metric',onClick:()=>set(i,{metricId:''})},'\u00d7')))
+          : (newAt===i? React.createElement(ScNewMetric,{W,seed:c.text,onCancel:()=>setNewAt(null),onCreate:(mm)=>{ set(i,{metricId:mm.id}); setNewAt(null); }})
+            : React.createElement('div',{className:'sce-link'},
+                React.createElement('div',{className:'sce-pick'},React.createElement(SearchSelect,{options:opts,value:'',onChange:v=>{ if(v) set(i,{metricId:v}); },placeholder:opts.length?'Track with a Business Review metric\u2026':'No metrics yet - make one'})),
+                canNew? React.createElement('button',{type:'button',className:'btn sm',style:{flexShrink:0,whiteSpace:'nowrap'},onClick:()=>setNewAt(i)},'+ New metric') : null)));
+    }),
+    React.createElement('button',{type:'button',className:'btn sm ghost',onClick:()=>onChange([...list,{id:uid('sc'),text:'',metricId:''}])},'+ Add success criterion'));
 }
 /* Completing an objective: record where each criterion landed and a note on the outcome. */
 function OkrCompleteModal({okr,onClose,onSave}){
   const [note,setNote]=useState(okr.completionNote||''); const [status,setStatus]=useState('done');
-  const [crit,setCrit]=useState(()=>(okr.successCriteria||[]).map(c=>({...c})));
+  const W=useWbr();
+  const [crit,setCrit]=useState(()=>(okr.successCriteria||[]).map(c=>{ const m=scMetricOf(c,W); const last=m? scTrend(W,m,6).last : null; return {...c, now:c.now||(last? wbrFmtV(last.pace,m.fmt) : '')}; }));
   const up=(i,v)=>{ const n=crit.slice(); n[i]=Object.assign({},n[i],{now:v}); setCrit(n); };
   return React.createElement(Modal,{title:'Complete objective',onClose,wide:true,
     footer:[React.createElement('button',{key:'c',className:'btn',onClick:onClose},'Cancel'), React.createElement('button',{key:'s',className:'btn primary',disabled:!note.trim(),onClick:()=>onSave({status,completionNote:note.trim(),successCriteria:crit,doneAt:nowISO()})}, status==='done'?'Mark complete':'Mark abandoned')]},
@@ -3013,7 +3163,7 @@ function OkrCompleteModal({okr,onClose,onSave}){
     React.createElement(Field,{label:'Completion note'}, React.createElement('textarea',{className:'inp',rows:4,value:note,placeholder:'What was achieved, what was not, and what it means for what comes next.',onChange:e=>setNote(e.target.value)})));
 }
 function OkrForm({initial,onSave,onClose,people}){
-  const [f,setF]=useState(()=>Object.assign({num:'',theme:'',objective:'',baseline:'',ownerId:'',timeframe:'2026',successCriteria:[]}, initial||{}));
+  const [f,setF]=useState(()=>Object.assign({num:'',theme:'',objective:'',baseline:'',ownerId:'',timeframe:'',successCriteria:[]}, initial||{}));
   const up=(k,v)=>setF(s=>({...s,[k]:v}));
   const valid=f.objective.trim().length>0 && f.theme.trim().length>0;
   return React.createElement(Modal,{title:initial&&initial.id?'Edit objective':'New objective',onClose,wide:true,
@@ -3021,7 +3171,7 @@ function OkrForm({initial,onSave,onClose,people}){
       React.createElement('button',{key:'s',className:'btn primary',disabled:!valid,onClick:()=>{onSave({...f,num:Number(f.num)||f.num});onClose();}}, initial&&initial.id?'Save changes':'Create objective')]},
     React.createElement('div',{className:'f-row'},
       React.createElement('div',{style:{flex:2.6,minWidth:0}}, React.createElement(Field,{label:'Objective name',hint:'short - shown as the title'}, React.createElement('input',{className:'inp',value:f.theme,placeholder:'e.g. Outbound Pilot',onChange:e=>up('theme',e.target.value)}))),
-      React.createElement('div',{style:{flex:1,minWidth:130}}, React.createElement(Field,{label:'Target',hint:'completion date or window'}, React.createElement('input',{className:'inp',value:f.timeframe,placeholder:'e.g. Aug 2026',onChange:e=>up('timeframe',e.target.value)})))),
+      React.createElement('div',{style:{flex:1,minWidth:170}}, React.createElement(Field,{label:'Completion date',hint:'the day this objective should be complete'}, React.createElement('input',{className:'inp',type:'date',value:okrDueISO(f.timeframe),onChange:e=>up('timeframe',e.target.value)})))),
     React.createElement(Field,{label:'Vision narrative',hint:'the story of where this objective takes the org'}, React.createElement('textarea',{className:'inp',value:f.objective,style:{minHeight:80},onChange:e=>up('objective',e.target.value)})),
     React.createElement(Field,{label:'Owner'}, React.createElement(SearchSelect,{options:peopleOptions(people),value:f.ownerId,onChange:v=>up('ownerId',v),placeholder:'Search people\u2026'})),
     React.createElement(Field,{label:'Success criteria'}, React.createElement(ScEditor,{items:f.successCriteria,onChange:v=>up('successCriteria',v)}))
@@ -3062,7 +3212,7 @@ function PersonForm({initial,onSave,onClose}){
           f.photoUrl && React.createElement('button',{className:'btn sm danger',onClick:()=>up('photoUrl','')},'Remove')),
         React.createElement('input',{type:'file',accept:'image/*',ref:fileRef,style:{display:'none'},onChange:onPick}))),
     React.createElement(Field,{label:'Name'}, React.createElement('input',{className:'inp',value:f.name,onChange:e=>up('name',e.target.value),autoFocus:true})),
-    React.createElement(Field,{label:'Role'}, React.createElement('input',{className:'inp',value:f.role,placeholder:'e.g. Customer Success',onChange:e=>up('role',e.target.value)})),
+    React.createElement(Field,{label:'Title'}, React.createElement('input',{className:'inp',value:f.role,placeholder:'e.g. Account Executive',onChange:e=>up('role',e.target.value)})),
     React.createElement(Field,{label:'Work email',hint:'used for @mentions and their inbox - match their sign-in email'}, React.createElement('input',{className:'inp',type:'email',value:f.email||'',placeholder:'name@moego.pet',onChange:e=>up('email',e.target.value)})),
     React.createElement(Field,{label:'Slack member ID',hint:'so Slack notifications actually @ping them - in Slack: click their profile, ... menu, Copy member ID (looks like U01ABC23)'}, React.createElement('input',{className:'inp',value:f.slackId||'',placeholder:'U01ABC23DEF',onChange:e=>up('slackId',e.target.value.trim())})),
     React.createElement(Field,{label:'Intro blurb',hint:'shown when someone taps their photo'}, React.createElement('textarea',{className:'inp',style:{minHeight:80},value:f.bio||'',placeholder:'A sentence or two - what they own, a fun fact, anything that introduces them.',onChange:e=>up('bio',e.target.value)}))
@@ -3578,15 +3728,16 @@ function OkrDrawer({okr}){
       React.createElement('div',{className:'kv',style:{marginBottom:18}},
         React.createElement(MetaRow,{k:'Owner'}, React.createElement(InlinePeople,{ids:okr.ownerId?[okr.ownerId]:[],people,
           onSave:(v)=>A.saveOkr({...okr,ownerId:v[0]||''})})),
-        React.createElement(MetaRow,{k:'Target'}, React.createElement('span',{style:{display:'inline-flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
-          React.createElement(InlineText,{value:okr.timeframe,placeholder:'Set a timeframe',
+        React.createElement(MetaRow,{k:'Completion date'}, React.createElement('span',{style:{display:'inline-flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          React.createElement(InlineDay,{value:okrDueISO(okr.timeframe),render:(v)=>v? fmtDate(v) : (okr.timeframe||'Set a date'),
             onSave:(v)=>A.saveOkr({...okr,timeframe:v})}),
           remain?React.createElement('span',{className:'tiny muted',style:{fontWeight:600}}, '\u00b7 '+remain):null))),
       React.createElement('div',{className:'section-title'},'Success criteria ('+crits.length+')',
-        React.createElement('span',{className:'fhint','data-tip':'Criteria with no open project driving them are flagged amber.'},React.createElement(Icon,{name:'info',size:13}))),
+        React.createElement('span',{className:'fhint','data-tip':'Criteria with no open project driving them are flagged amber. A criterion tracked by a Business Review metric shows its latest reading - click it to open the metric.'},React.createElement(Icon,{name:'info',size:13}))),
       crits.length
         ? React.createElement('div',{style:{marginBottom:18}}, crits.map((c,i)=>React.createElement(ScLine,{key:c.id||i,c:c,ps:ps})))
         : React.createElement('div',{className:'empty',style:{marginBottom:18}},'No success criteria yet. Edit the objective to add them.'),
+      React.createElement(OkrTrends,{okr}),
       React.createElement('div',{className:'section-title'},'Projects ('+ps.length+')'),
       React.createElement('div',{style:{marginBottom:6}}, React.createElement(OkrProjectList,{ps:ps})),
       React.createElement(CommentThread,{entityType:'objective',entityId:okr.id}),
@@ -3607,8 +3758,8 @@ function Disclosure({title, count, open, onToggle, children}){
 function TargetLabel({value, remain}){
   if(!value) return null;
   return React.createElement('span',{className:'target'},
-    React.createElement('span',{className:'lbl'},'Target'),
-    React.createElement('span',{className:'val'}, value),
+    React.createElement('span',{className:'lbl'},'Completion date'),
+    React.createElement('span',{className:'val'}, okrDueLabel(value)),
     remain&&React.createElement('span',{className:'tiny muted',style:{display:'block',fontWeight:600}}, remain));
 }
 function StatCard({n,label,tone}){ const dot = tone==='alert'?'var(--red)':tone==='warn'?'var(--amber)':tone==='good'?'var(--green)':null;
@@ -3971,7 +4122,7 @@ function OkrCard({okr}){
       owner&&React.createElement('span',{style:{display:'inline-flex',gap:6,alignItems:'center'}},React.createElement(Avatar,{person:owner,size:'sm'}),owner.name.split(' ')[0]),
       React.createElement('span',null,(okr.successCriteria||[]).length+' criteria'),
       React.createElement('span',null,ps.length+' project'+(ps.length===1?'':'s')),
-      okr.timeframe&&React.createElement('span',null,okr.timeframe)),
+      okr.timeframe&&React.createElement('span',null,okrDueLabel(okr.timeframe))),
     anyOpen && React.createElement('div',{style:{display:'flex',gap:34,alignItems:'center',justifyContent:'flex-start',flexWrap:'wrap',margin:'18px 0 6px'}},
       owner&&React.createElement('span',{style:{display:'inline-flex',gap:10,alignItems:'center'}}, React.createElement(Avatar,{person:owner,size:'lg'}), React.createElement(MetaCol,{label:'Owner'}, owner.name)),
       React.createElement(TargetLabel,{value:okr.timeframe,remain:remain}),
@@ -5209,7 +5360,7 @@ function cirriSnapshot(g, H, PM, W, opts){
       repliesAsked:rs.asked, repliesAnswered:rs.answered, medianReplyHours: rs.medianHours==null? null : Math.round(rs.medianHours*10)/10, unansweredOver48h:rs.open.length}; });
   /* objectives */
   const okrOut=okrs.map(o=>{ const ps=projOut.filter(p=>(p.objectiveIds||[]).includes(o.id)); const crit=(o.successCriteria||[]); const covered=new Set(); tasks.forEach(t=>(t.criteriaIds||[]).forEach(c=>covered.add(c))); projects.forEach(p=>(p.criteriaIds||[]).forEach(c=>covered.add(c)));
-    return {id:o.id, name:o.theme||o.name||o.title||'', statement:String(o.objective||'').slice(0,300), ownerId:o.ownerId||'', timeframe:o.timeframe||'', status:o.archived?'archived':(o.status||'active'), doneAt:o.doneAt||'', completionNote:String(o.completionNote||'').slice(0,400), health:o.health||'', criteria:crit.map(c=>({id:c.id,text:c.text,start:c.start||'',now:c.now||'',target:c.target||'',covered:covered.has(c.id)})), projectIds:ps.map(p=>p.id), activeProjects:ps.filter(p=>p.queue==='active').length, doneProjects:ps.filter(p=>p.queue==='closed').length}; });
+    return {id:o.id, name:o.theme||o.name||o.title||'', statement:String(o.objective||'').slice(0,300), ownerId:o.ownerId||'', timeframe:okrDueISO(o.timeframe)||o.timeframe||'', status:o.archived?'archived':(o.status||'active'), doneAt:o.doneAt||'', completionNote:String(o.completionNote||'').slice(0,400), health:o.health||'', criteria:crit.map(c=>({id:c.id,text:c.text,metricId:c.metricId||'',start:c.start||'',now:c.now||'',target:c.target||'',covered:covered.has(c.id)})), projectIds:ps.map(p=>p.id), activeProjects:ps.filter(p=>p.queue==='active').length, doneProjects:ps.filter(p=>p.queue==='closed').length}; });
   const changes=(opts.hcHistory||[]).slice().sort((a,b)=>String(b.effectiveDate||'').localeCompare(String(a.effectiveDate||''))).slice(0,60).map(h=>({when:h.effectiveDate,type:h.type,name:h.name,role:h.role||h.title||'',org:lbl[h.leaderId]||''}));
   const departures=(opts.attrition||[]).slice().sort((a,b)=>String(b.exitDate||'').localeCompare(String(a.exitDate||''))).slice(0,40).map(a=>({when:a.exitDate,name:a.name,role:a.role||'',org:lbl[a.leaderId]||'',type:a.attritionType||'',reason:String(a.reason||'').slice(0,160)}));
   /* metrics: latest reading and goal; judgement of on/off plan is left to the reader for now */
@@ -5252,7 +5403,7 @@ function snapshotText(s){
   L.push('\nPEOPLE (id | name | title | level | org | manager | tenure months | ACTIVE projects owned | QUEUED projects owned (not in progress) | closed projects owned | open tasks | overdue tasks | overdue ACTIVE projects | date pushes on owned | stale active | check-ins missing this week | tasks done 90d | on-time % | median reply h | unanswered >48h | last in Cirri | on leave'+(s.people.some(p=>p.performance!==undefined)?' | performance rating | attrition risk':'')+(s.people.some(p=>p.ote!==undefined)?' | OTE per year | OTE split per year (base, variable at target, bonus at target) | FULLY LOADED cost per year | paid in | cost allocation':'')+')');
   s.people.forEach(p=>L.push([p.id,p.name,p.title,p.level,p.org,name(p.managerId),p.tenureMonths==null?'-':p.tenureMonths,p.activeProjectsOwned,p.queuedProjectsOwned,p.closedProjectsOwned,p.openTasks,p.overdueTasks,p.overdueProjects,p.datePushesOnOwned,p.staleActiveProjects,p.checkinsMissingThisWeek,p.tasksDone90d,p.onTimeRate90d==null?'-':p.onTimeRate90d,p.medianReplyHours==null?'-':p.medianReplyHours,p.unansweredOver48h,p.lastInCirri?String(p.lastInCirri).slice(0,10):'-',p.onLeave?'leave':''].concat(p.performance!==undefined?[p.performance||'-',p.attritionRisk||'-']:[]).concat(p.ote!==undefined?[p.ote,p.payParts||'not split',p.fullyLoadedCost,p.paidIn||'-',p.allocation||'-']:[]).join(' | ')));
   L.push('\nOBJECTIVES - ACTIVE means being pursued now; COMPLETED means closed as achieved on the date shown; ABANDONED means closed without being achieved. Each success criterion shows start -> now -> target where those were recorded (id | name | STATUS | closed on | owner | timeframe | statement | active projects | completed projects | completion note | success criteria: text [start -> now -> target] (covered by work: yes/no))');
-  s.objectives.forEach(o=>L.push([o.id,o.name,({active:'ACTIVE',done:'COMPLETED',abandoned:'ABANDONED',archived:'ARCHIVED'})[o.status]||String(o.status).toUpperCase(),o.doneAt?String(o.doneAt).slice(0,10):'-',name(o.ownerId),o.timeframe||'-',o.statement.replace(/\n/g,' ')||'-',o.activeProjects,o.doneProjects,o.completionNote.replace(/\n/g,' ')||'-',o.criteria.map(c=>c.text+' ['+(c.start||'?')+' -> '+(c.now||'?')+' -> '+(c.target||'?')+'] (covered: '+(c.covered?'yes':'no')+')').join('; ')||'-'].join(' | ')));
+  s.objectives.forEach(o=>L.push([o.id,o.name,({active:'ACTIVE',done:'COMPLETED',abandoned:'ABANDONED',archived:'ARCHIVED'})[o.status]||String(o.status).toUpperCase(),o.doneAt?String(o.doneAt).slice(0,10):'-',name(o.ownerId),o.timeframe||'-',o.statement.replace(/\n/g,' ')||'-',o.activeProjects,o.doneProjects,o.completionNote.replace(/\n/g,' ')||'-',o.criteria.map(c=>c.text+(c.metricId?' {tracked by Business Review metric '+c.metricId+' - read its value, goal and trend in BUSINESS REVIEW METRICS}':' ['+(c.start||'?')+' -> '+(c.now||'?')+' -> '+(c.target||'?')+']')+' (covered: '+(c.covered?'yes':'no')+')').join('; ')||'-'].join(' | ')));
   if((s.peopleChanges||[]).length){ L.push('\nPEOPLE CHANGES - hires and departures on record, newest first (date | change | name | role | org)'); s.peopleChanges.forEach(h=>L.push([h.when,h.type,h.name,h.role,h.org].join(' | '))); }
   if((s.departures||[]).length){ L.push('\nDEPARTURES - the attrition log (date | name | role | org | type | reason)'); s.departures.forEach(a=>L.push([a.when,a.name,a.role,a.org,a.type,a.reason||'-'].join(' | '))); }
   L.push('\nPROJECTS (id | name | owner | QUEUE | status | health | impact | effort | due | overdue days | pushes | days since activity | stale | open/done/overdue tasks | check-in this week | last check-in | latest note | recent history | description)');
@@ -10725,7 +10876,7 @@ function HcLeaderRoster({leaderId}){
   const orgAll = H.employees.filter(e=>e.leaderId===leaderId && hcStatus(e)==='active');
   const hasFilters = !!search || fPerf!=='all' || fAttr!=='all';
   const emps = orgAll.filter(e=>{
-    if(search){ const q=search.toLowerCase(); if(!(e.name||'').toLowerCase().includes(q) && !(e.role||'').toLowerCase().includes(q)) return false; }
+    if(search){ const q=search.toLowerCase(); if(!(e.name||'').toLowerCase().includes(q) && !(e.title||e.role||'').toLowerCase().includes(q)) return false; }
     if(fPerf!=='all' && e.performance!==fPerf) return false;
     if(fAttr!=='all'){ if(fAttr==='flagged'&&!e.attrition) return false; if(fAttr!=='flagged'&&e.attrition!==fAttr) return false; }
     return true;
@@ -10752,7 +10903,7 @@ function HcLeaderRoster({leaderId}){
           React.createElement('div',{className:'linkish',style:{fontWeight:650,cursor:'pointer'},onClick:()=>hcx.openModal({type:'empDrawer',empId:emp.id})}, emp.name, isDL&&React.createElement('span',{className:'pill-s s-blue',style:{marginLeft:6,fontSize:9.5,padding:'1px 6px'}},'Leader')),
           emp.title&&React.createElement('div',{className:'tiny',style:{color:'var(--muted)'}},emp.title),
           emp.onLeave&&React.createElement('div',{className:'tiny',style:{color:'var(--amber)',fontWeight:700,textTransform:'uppercase',letterSpacing:.3}},'On leave')))),
-      React.createElement('td',{style:{color:'var(--muted)',fontSize:12,maxWidth:150}}, emp.role),
+      React.createElement('td',{style:{color:'var(--muted)',fontSize:12,maxWidth:150}}, emp.title||emp.role),
       React.createElement('td',{className:'c'}, React.createElement('span',{style:{background:'var(--sky-100)',borderRadius:5,padding:'1px 6px',fontSize:11,fontWeight:700,color:'var(--deep)'}},hcLevelName(emp.level))),
       React.createElement('td',{style:{color:'var(--muted)',fontSize:12}}, emp.manager),
       React.createElement('td',{className:'tiny',style:{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}, hcTenureLbl(mo)),
@@ -10793,7 +10944,7 @@ function HcLeaderRoster({leaderId}){
       React.createElement('div',{style:{overflowX:'auto'}},
         React.createElement('table',{className:'tbl'},
           React.createElement('thead',null,React.createElement('tr',null,
-            th('#'),th('Employee'),th('Role'),th('Lvl',false,true),th('Manager'),th('Tenure'),th(unlocked?'Perf':['Perf ',React.createElement(Icon,{key:'i',name:'lock',size:10})]),th(unlocked?'Attrition':['Attrition ',React.createElement(Icon,{key:'i',name:'lock',size:10})]),th('Teams'),th('Cost alloc'),th(unlocked?'OTE':['OTE ',React.createElement(Icon,{key:'i',name:'lock',size:10})],true),th(unlocked?'FL':['FL ',React.createElement(Icon,{key:'i',name:'lock',size:10})],true))),
+            th('#'),th('Employee'),th('Title'),th('Lvl',false,true),th('Manager'),th('Tenure'),th(unlocked?'Perf':['Perf ',React.createElement(Icon,{key:'i',name:'lock',size:10})]),th(unlocked?'Attrition':['Attrition ',React.createElement(Icon,{key:'i',name:'lock',size:10})]),th('Teams'),th('Cost alloc'),th(unlocked?'OTE':['OTE ',React.createElement(Icon,{key:'i',name:'lock',size:10})],true),th(unlocked?'FL':['FL ',React.createElement(Icon,{key:'i',name:'lock',size:10})],true))),
           React.createElement('tbody',null, emps.map(empRow)))),
       emps.length===0&&React.createElement('div',{className:'empty',style:{padding:'28px'}},
         orgAll.length===0
@@ -10931,7 +11082,7 @@ function HcAttrition(){
       React.createElement('div',{style:{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}, React.createElement('span',{className:'section-title',style:{margin:0}},'Departed ('+departed.length+')')),
       React.createElement('div',{style:{overflowX:'auto'}},
         React.createElement('table',{className:'tbl'},
-          React.createElement('thead',null,React.createElement('tr',null,th('Name'),th('Role'),th('Org'),th('Type'),th('Exit date'),th('Reason'),th('',true))),
+          React.createElement('thead',null,React.createElement('tr',null,th('Name'),th('Title'),th('Org'),th('Type'),th('Exit date'),th('Reason'),th('',true))),
           React.createElement('tbody',null, departed.length?departed.map(e=>React.createElement('tr',{key:e.id,style:{cursor:'default'}},
             React.createElement('td',null,nameLink(e)),
             React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},e.title||e.role),
@@ -10948,10 +11099,10 @@ function HcAttrition(){
         React.createElement('span',{className:'muted tiny'},'Active people flagged as a risk - Attrit them when they leave')),
       React.createElement('div',{style:{overflowX:'auto'}},
         React.createElement('table',{className:'tbl'},
-          React.createElement('thead',null,React.createElement('tr',null,th('Employee'),th('Role'),th('Org'),th('Flag'),th('Notes'),th('',true))),
+          React.createElement('thead',null,React.createElement('tr',null,th('Employee'),th('Title'),th('Org'),th('Flag'),th('Notes'),th('',true))),
           React.createElement('tbody',null, flagged.length?flagged.map(e=>React.createElement('tr',{key:e.id,style:{cursor:'default'}},
             React.createElement('td',null,nameLink(e)),
-            React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},e.role),
+            React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},e.title||e.role),
             React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},lname(e.leaderId)),
             React.createElement('td',null,React.createElement('span',{className:'pill-s '+typeCls(e.attrition)},shortType(e.attrition))),
             React.createElement('td',{className:'tiny',style:{color:'var(--muted)',maxWidth:220}},e.notes||'\u2014'),
@@ -10962,10 +11113,10 @@ function HcAttrition(){
       React.createElement('div',{style:{padding:'12px 16px',borderBottom:'1px solid var(--line)'}}, React.createElement('span',{className:'section-title',style:{margin:0}},'Legacy departure log ('+legacy.length+')')),
       React.createElement('div',{style:{overflowX:'auto'}},
         React.createElement('table',{className:'tbl'},
-          React.createElement('thead',null,React.createElement('tr',null,th('Name'),th('Role'),th('Org'),th('Type'),th('Exit date'),th('Reason'),th('',true))),
+          React.createElement('thead',null,React.createElement('tr',null,th('Name'),th('Title'),th('Org'),th('Type'),th('Exit date'),th('Reason'),th('',true))),
           React.createElement('tbody',null, legacy.map(en=>React.createElement('tr',{key:en.id,style:{cursor:'default'}},
             React.createElement('td',null,React.createElement('b',null,en.name)),
-            React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},en.role),
+            React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},en.title||en.role),
             React.createElement('td',{className:'tiny',style:{color:'var(--muted)'}},lname(en.leaderId)),
             React.createElement('td',null,React.createElement('span',{className:'pill-s '+typeCls(en.attritionType)},shortType(en.attritionType))),
             React.createElement('td',{className:'tiny',style:{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}},en.exitDate||'\u2014'),
@@ -11132,7 +11283,6 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
         hcHasParts(f)? 'Base + variable + bonus. Worked out, never typed.' : 'Enter base, variable and bonus and OTE is worked out from them. A record without them keeps the OTE typed here.')),
     React.createElement('div',{className:'f-row'},
       field('Paid in',React.createElement('select',{className:'inp',value:f.currency||WSR.currency||'USD',onChange:e=>set('currency',e.target.value)}, CURRENCIES.map(c=>React.createElement('option',{key:c[0],value:c[0]},c[0]))),'The currency this person is paid in. Reports convert to the workspace currency with the rates under Settings > Cost.'), field('Country',React.createElement('select',{className:'inp',value:f.country,onChange:e=>set('country',e.target.value)},HC_COUNTRIES.map(c=>React.createElement('option',{key:c,value:c},c))))),
-    field('Role',inp('role')),
     React.createElement('div',{className:'f-row'}, field('Work email',inp('email','email','name@company.com'),'The one they sign in with. It is how the app knows who they are, and how Slack finds them for direct messages.'),
       field('Slack member ID',inp('slackId','text','U01ABC23DEF'),'Only needed if their Slack account uses a different email than the one above. In Slack: open their profile, the three-dot menu, Copy member ID.')),
     React.createElement('div',{className:'f-row'},
@@ -11174,7 +11324,7 @@ function HcReqModal({leaderId,onClose}){
     footer:[React.createElement('button',{key:1,className:'btn',onClick:onClose},'Cancel'),React.createElement('button',{key:2,className:'btn primary',disabled:!canSave,onClick:save},'Open req #'+H.nextReq)]},
     React.createElement('div',{className:'note',style:{marginTop:0,marginBottom:14,fontSize:12.5}},'This opens requisition #'+H.nextReq+'. When you hire, you\u2019ll convert this same record into the person - the req number stays with them for life.'),
     field('Title',React.createElement('input',{className:'inp',autoFocus:true,placeholder:'e.g. Senior Outbound AE',value:f.title,onChange:e=>set('title',e.target.value)})),
-    React.createElement('div',{className:'f-row'}, field('Role / function',React.createElement('input',{className:'inp',placeholder:'e.g. Account Executive',value:f.role,onChange:e=>set('role',e.target.value)})), field('Level',React.createElement('input',{className:'inp',type:'number',value:f.level,onChange:e=>set('level',e.target.value)}))),
+    React.createElement('div',{className:'f-row'}, field('Level',React.createElement('input',{className:'inp',type:'number',value:f.level,onChange:e=>set('level',e.target.value)}))),
     React.createElement('div',{className:'f-row'}, React.createElement(HcManagerPick,{value:f.managerId||f.manager,onChange:v=>{ set('manager',v.name); set('managerId',v.id); },employees:H.employees,label:'Hiring manager'}), field('Org / team',React.createElement('select',{className:'inp',value:f.leaderId,onChange:e=>set('leaderId',e.target.value)},leaders.map(l=>React.createElement('option',{key:l.id,value:l.id},l.label))))),
     field('Target OTE ($)',React.createElement('input',{className:'inp',type:'number',placeholder:'planned comp (optional)',value:f.targetOte,onChange:e=>set('targetOte',e.target.value)})),
     React.createElement('div',{className:'section-title'},'Cost tags'),
@@ -11211,7 +11361,6 @@ function HcHistoryTimeline({emp,unlocked,leaders}){
   const changeRows=(ev)=>{
     const rows=[];
     const add=(lab,from,to)=>{ if(String(from||'')!==String(to||'')) rows.push(React.createElement('div',{key:lab,className:'tiny',style:{color:'var(--muted)'}}, lab+': ', React.createElement('span',{style:{textDecoration:'line-through'}}, from||'\u2014'), ' \u2192 ', React.createElement('b',{style:{color:'var(--ink)'}}, to||'\u2014'))); };
-    add('Role',ev.fromRole,ev.toRole);
     add('Title',ev.fromTitle,ev.toTitle);
     add('Level',ev.fromLevel!=null?'L'+ev.fromLevel:'',ev.toLevel!=null?'L'+ev.toLevel:'');
     add('Manager',ev.fromManager,ev.toManager);
