@@ -284,7 +284,6 @@ tr.proj-active-tr:hover td{background:rgba(245,197,24,.10)}
 .wcell-date{flex:0 0 auto;min-width:48px;text-align:right;white-space:nowrap}
 .wcell-status{flex:0 0 auto;min-width:96px;display:flex;justify-content:flex-start;align-items:center}
 .cbox{width:18px;height:18px;flex:0 0 auto;border-radius:50%;border:1.5px solid var(--line-strong);cursor:pointer;display:flex;align-items:center;justify-content:center;color:transparent;font-size:11px;font-weight:900;background:var(--panel);transition:border-color .12s,color .12s}
-.cbox:hover{border-color:var(--green);color:var(--green);background:var(--green-bg)}
 .date-edit{cursor:pointer;border-bottom:1px dashed transparent;border-radius:3px;padding:0 2px}
 .date-edit:hover{border-bottom-color:var(--muted-2);background:var(--sky-50)}
 .ctray-wrap{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(0,22,40,.32);padding:20px;animation:ctrayFade .14s ease}
@@ -1067,6 +1066,21 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .sce-top{align-items:center}
 .sce-top .sce-chip{flex:1 1 auto;padding:7px 10px}
 .sce-old{font-size:12.5px;color:var(--ink-2);margin:0 0 6px;overflow-wrap:anywhere;line-height:1.45}
+.sc-sec{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:6px;background:#f2f6fa;border:1px solid var(--line);font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--ink-2);vertical-align:1px;white-space:nowrap}
+.stg{width:10px;height:10px;border-radius:50%;flex:0 0 auto;box-sizing:border-box;border:1.5px solid var(--line-strong);background:transparent;display:inline-block}
+.stg.st-in_progress{border-color:var(--accent-700);background:linear-gradient(90deg,var(--accent-700) 50%,transparent 50%)}
+.stg.st-blocked{border-color:var(--red);background:var(--red)}
+.stg.st-done{border-color:var(--deep);background:var(--deep)}
+.stg.st-abandoned{border-style:dashed}
+.cbox.prog{border-color:var(--accent-700);background:linear-gradient(90deg,var(--accent) 50%,var(--panel) 50%)}
+.cbox.blk{border-color:var(--red)}
+.cbox:hover{border-color:var(--deep);color:var(--deep);background:var(--sky-100)}
+.tk-band{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.tk-band:first-child{margin-top:2px}
+.tk-band.quiet{color:var(--ink-2)}
+.tk-band-n{font-weight:700;color:var(--ink-2);letter-spacing:0}
+.card.tk-in_progress,.card.tk-blocked{border-color:var(--accent-700)}
+.card.tk-not_started .tlink{color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -1126,7 +1140,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-15-1503';
+const BUILD='2026-11-15-1512';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -1235,7 +1249,13 @@ const isActiveProj=(p)=>!!(p&&p.queue==='active'&&!isClosedStatus(p.status));
    SCM (refreshed by StoreProvider on every render, like WSR and HCR), so a rename in the review shows on
    every objective at once. scRaw is the old free text, kept only for criteria written before metrics. */
 const SCM={};
-function scRefresh(metrics){ Object.keys(SCM).forEach(k=>delete SCM[k]); (metrics||[]).forEach(m=>{ if(m&&m.id) SCM[m.id]=m.name||''; }); }
+const SCM_SEC={};   /* metric id -> its section's name, only for metrics whose name is shared with another metric */
+function scRefresh(metrics, sections){ Object.keys(SCM).forEach(k=>delete SCM[k]); Object.keys(SCM_SEC).forEach(k=>delete SCM_SEC[k]);
+  const live=(metrics||[]).filter(m=>m&&m.id); const n={}; live.forEach(m=>{ if(!m.archived){ const k=String(m.name||'').trim().toLowerCase(); n[k]=(n[k]||0)+1; } });
+  const lbl={}; (sections||[]).forEach(x=>{ lbl[x.id]=x.label||x.id; });
+  live.forEach(m=>{ const shared=n[String(m.name||'').trim().toLowerCase()]>1; if(shared) SCM_SEC[m.id]=lbl[m.sec]||m.sec||''; SCM[m.id]=(m.name||'')+(shared&&SCM_SEC[m.id]?' - '+SCM_SEC[m.id]:''); }); }
+/* the same name split in two, for places that set the section apart: {name, sec} */
+function scParts(c){ const id=c&&typeof c==='object'&&c.metricId; if(id&&SCM[id]&&SCM_SEC[id]) return {name:SCM[id].slice(0,SCM[id].length-SCM_SEC[id].length-3), sec:SCM_SEC[id]}; return {name:scText(c), sec:''}; }
 const scRaw=(c)=> typeof c==='string'?c:((c&&c.text)||'');
 const scText=(c)=>{ if(c&&typeof c==='object'&&c.metricId){ if(SCM[c.metricId]) return SCM[c.metricId]; return scRaw(c)||'Metric no longer in the Business Review'; } return scRaw(c); };
 const isStretchProj=(p)=>!!(p&&p.queue==='stretch'&&!isClosedStatus(p.status));
@@ -2156,7 +2176,7 @@ function StoreProvider({children}){
   const [state, setState] = useState(blankState);
   const stateRef = useRef(state); stateRef.current = state;
   /* keep the runtime copies of the settings in step with the state every render */
-  wsRefresh(state.meta); hcRefresh(hcEffSettings(state.hcSettings)); scRefresh(state.wbr_metrics);
+  wsRefresh(state.meta); hcRefresh(hcEffSettings(state.hcSettings)); scRefresh(state.wbr_metrics, wbrEffSettings(state.wbrSettings).sections);
   const [me, setMe] = useState(()=>{ try{return localStorage.getItem(LS_ME)||'';}catch(e){return '';} });
   const [sync, setSync] = useState('local');     // local | live | connecting | error
   const [toast, setToast] = useState(null);
@@ -2796,6 +2816,7 @@ function Pill({kind, value}){
   if(kind==='health'){
     return React.createElement('span',{className:'pill-s has-dot '+def.cls}, React.createElement('span',{className:'hdot',style:{background:def.color}}), def.label);
   }
+  if(kind==='status') return React.createElement('span',{className:'pill-s has-dot '+def.cls}, React.createElement('span',{className:'stg st-'+value}), def.label);
   return React.createElement('span',{className:'pill-s '+def.cls}, def.label);
 }
 function HealthDot({value, status}){
@@ -3069,7 +3090,7 @@ function ScLine({c, ps}){
   return React.createElement('div',{className:'sc-line'},
     React.createElement('div',{className:'sc-line-top'},
       React.createElement('span',{className:'sc-flag'+(uncovered?' warn':''),title:uncovered?'No open project drives this criterion':''}),
-      React.createElement('span',{className:'sc-text'}, scText(c)),
+      React.createElement('span',{className:'sc-text'}, scParts(c).name, scParts(c).sec? React.createElement('span',{className:'sc-sec'},scParts(c).sec) : null),
       c&&c.metricId? React.createElement(ScMetricBadge,{c}) : null,
       uncovered&&React.createElement('span',{className:'pill-s s-amber',style:{fontSize:10,padding:'1px 7px',flexShrink:0}},'no work'),
       !uncovered&&driving.length>0&&React.createElement('span',{className:'pill-s s-grey',style:{fontSize:10,padding:'1px 7px',flexShrink:0},title:driving.length+' linked project'+(driving.length===1?'':'s')+' drive this'},driving.length+' proj')));
@@ -3083,9 +3104,9 @@ function OkrTrends({okr}){
     React.createElement('div',{className:'section-title'},'Trend',
       React.createElement('span',{className:'fhint','data-tip':'Each tracked success criterion over time, read from the Business Review. A month-to-date total is drawn at its pace. Dashed line is the goal.'},React.createElement(Icon,{name:'info',size:13}))),
     React.createElement('div',{className:'sct-grid'}, rows.map(({c,m,tr})=>React.createElement('div',{key:c.id,className:'wbr-card sct-card'},
-      React.createElement('div',{className:'sct-crit',title:scText(c)}, scText(c)),
+      React.createElement('div',{className:'sct-crit',title:scText(c)}, scParts(c).name, scParts(c).sec? React.createElement('span',{className:'sc-sec'},scParts(c).sec) : null),
       React.createElement('div',{className:'sct-sub'},
-        React.createElement('span',{className:'tlink sct-mn',title:m.name,onClick:()=>nav.openMetric(m.id)},m.name),
+        React.createElement('span',{className:'tlink sct-mn',title:'Open in the Business Review',onClick:()=>nav.openMetric(m.id)},(W.secMap[m.sec]||{}).label||m.sec),
         React.createElement(WbrCad,{cad:m.cad})),
       React.createElement('div',{className:'wbr-card-s'},
         React.createElement('span',{className:'big'}, tr.last? wbrFmtV(tr.last.pace,m.fmt) : '\u2014'),
@@ -3637,14 +3658,14 @@ function ProjectDrawer({project}){
           !GCT.hidden&&React.createElement('button',{className:'btn sm primary','data-tip':GCT.tip,onClick:()=>setNewTask(true)},'+ New task'))),
       tselIds.length? React.createElement(TaskBulkBar,{ids:tselIds,onClear:()=>setTsel({})}):null,
       isActiveProj(project) && !project.dueDate && React.createElement('div',{className:'banner',style:{margin:'8px 0'}}, '\u26a0\ufe0f This project is active but has no committed date. Add one - active means you commit to a date.'),
-      React.createElement('div',{style:{marginTop:8}}, tasks.length? (function(){ const open=sortByDue(tasks.filter(t=>!isClosedStatus(t.status))); const closed=tasks.filter(t=>isClosedStatus(t.status)).sort((a,b)=>String(b.doneAt||b.lastActivity||'').localeCompare(String(a.doneAt||a.lastActivity||''))); return open.concat(closed.length? [{__band:true, n:closed.length}] : [], closed); })().map(t=>{
-        if(t.__band) return React.createElement('div',{key:'band',className:'section-title done-band'}, 'Completed ('+t.n+')');
+      React.createElement('div',{style:{marginTop:8}}, tasks.length? (function(){ const open=sortByDue(tasks.filter(t=>!isClosedStatus(t.status))); const closed=tasks.filter(t=>isClosedStatus(t.status)).sort((a,b)=>String(b.doneAt||b.lastActivity||'').localeCompare(String(a.doneAt||a.lastActivity||''))); const going=open.filter(t=>t.status!=='not_started'), waiting=open.filter(t=>t.status==='not_started'); return [].concat(going.length? [{__band:true, id:'b1', label:'In progress', n:going.length}] : [], going, waiting.length? [{__band:true, id:'b2', label:'Not started', n:waiting.length, quiet:true}] : [], waiting, closed.length? [{__band:true, id:'b3', label:'Completed', n:closed.length}] : [], closed); })().map(t=>{
+        if(t.__band) return React.createElement('div',{key:t.id,className:'tk-band'+(t.quiet?' quiet':'')}, React.createElement('span',{className:'stg st-'+(t.label==='In progress'?'in_progress':t.label==='Completed'?'done':'not_started')}), t.label, React.createElement('span',{className:'tk-band-n'},t.n));
         const over=isOverdue(t.dueDate,t.status);
-        return React.createElement('div',{key:t.id,className:'card'+(tsel[t.id]?' wbr-selected':'')+(isClosedStatus(t.status)?' done-card':''),style:{padding:'11px 13px',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',gap:12},onClick:()=>nav.openTask(t.id,project.id)},
+        return React.createElement('div',{key:t.id,className:'card tk-'+t.status+(tsel[t.id]?' wbr-selected':'')+(isClosedStatus(t.status)?' done-card':''),style:{padding:'11px 13px',marginBottom:8,cursor:'pointer',display:'flex',alignItems:'center',gap:12},onClick:()=>nav.openTask(t.id,project.id)},
           PM.can('task.edit').allow&&React.createElement('input',{type:'checkbox','aria-label':'Select '+t.title,style:{flexShrink:0},
             checked:!!tsel[t.id],onClick:e=>e.stopPropagation(),
             onChange:()=>setTsel(s=>Object.assign({},s,{[t.id]:!s[t.id]}))}),
-          !isClosedStatus(t.status)? React.createElement(CompleteBox,{onDone:()=>completeTaskInline(t),title:'Mark task done'})
+          !isClosedStatus(t.status)? React.createElement(CompleteBox,{onDone:()=>completeTaskInline(t),title:'Mark task done',status:t.status})
             : React.createElement('span',{className:'done-check'+(t.status==='done'?'':' abd'),'aria-label':t.status==='done'?'Done':'Abandoned'}, React.createElement(Icon,{name:t.status==='done'?'check':'x',size:13,strokeWidth:3})),
           React.createElement('div',{style:{flex:1,minWidth:0}},
             React.createElement('div',{style:{fontWeight:600,display:'flex',gap:8,alignItems:'center'}}, React.createElement('span',{className:'tlink'},t.title), t.status==='blocked'&&React.createElement('span',{className:'pill-s s-red'},'Blocked')),
@@ -4267,8 +4288,8 @@ function MyWorkView(){
     W.header,
     React.createElement(RhythmView,{person:W.shown, onPick:onPick, all:W.isAll, onlyIds:(W.isAll&&W.teamOnly)? W.visibleIds : null}));
 }
-function CompleteBox({onDone, title}){
-  return React.createElement('span',{className:'cbox',title:title||'Mark done',onClick:(e)=>{e.stopPropagation();onDone();}},'\u2713');
+function CompleteBox({onDone, title, status}){
+  return React.createElement('span',{className:'cbox'+(status==='in_progress'?' prog':status==='blocked'?' blk':''),title:title||'Mark done',onClick:(e)=>{e.stopPropagation();onDone();}},'\u2713');
 }
 function InlineDate({value, onCommit, placeholder}){
   const [editing,setEditing]=useState(false); const ref=useRef(null);
