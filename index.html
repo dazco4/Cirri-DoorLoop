@@ -1091,6 +1091,8 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .succ-if{margin:0 0 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f6f9fb}
 .succ-if .klabel{display:block;margin-bottom:4px}
 .succ-if-t{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.5;color:var(--ink)}
+.stage-seg{width:fit-content;max-width:100%;flex-wrap:wrap}
+.stage-seg button{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1150,7 +1152,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-15-1527';
+const BUILD='2026-11-16-1519';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -1269,6 +1271,17 @@ function scParts(c){ const id=c&&typeof c==='object'&&c.metricId; if(id&&SCM[id]
 const scRaw=(c)=> typeof c==='string'?c:((c&&c.text)||'');
 const scText=(c)=>{ if(c&&typeof c==='object'&&c.metricId){ if(SCM[c.metricId]) return SCM[c.metricId]; return scRaw(c)||'Metric no longer in the Business Review'; } return scRaw(c); };
 const isStretchProj=(p)=>!!(p&&p.queue==='stretch'&&!isClosedStatus(p.status));
+/* A PROJECT HAS ONE STAGE: Active, Stretch, Queued, Done or Abandoned. It replaces the old project status
+   (not started / in progress / blocked), which said the same thing as the queue a second time.
+   Underneath, a project still carries queue and status so every older reader keeps working: the stage is
+   READ from them (projStage) and the two are always written together (projWithStage). An open project's
+   status is never chosen - it follows the queue (projNormStatus), on load and on every save. Projects are
+   not "blocked" any more; a blocker belongs on the task that is stuck. Tasks keep their own statuses. */
+const PROJ_STAGE={active:'Active',stretch:'Stretch',queued:'Queued',done:'Done',abandoned:'Abandoned'};
+const PROJ_STAGE_ORDER=['active','stretch','queued','done','abandoned'];
+function projStage(p){ if(!p) return 'queued'; if(p.status==='done') return 'done'; if(p.status==='abandoned') return 'abandoned'; return p.queue==='active'?'active' : p.queue==='stretch'?'stretch' : 'queued'; }
+function projNormStatus(p){ if(!p||isClosedStatus(p.status)) return p; const st=(p.queue==='active'||p.queue==='stretch')?'in_progress':'not_started'; return p.status===st? p : Object.assign({},p,{status:st}); }
+function projWithStage(p, stage){ if(stage==='done'||stage==='abandoned') return Object.assign({},p,{status:stage}); return projNormStatus(Object.assign({},p,{queue:stage,status:''})); }
 function normSc(o){ return (o.successCriteria||[]).map((c,i)=>{ if(c&&typeof c==='object') return Object.assign({},c,{id:c.id||o.id+'_sc'+i,text:scRaw(c)}); return {id:o.id+'_sc'+i,text:scRaw(c)}; }); }
 /* parse a timeframe string into a window - tolerant of how people actually write dates:
    "2026", "2026 H1", "Q3 2026", "Aug 2026", "Dec 31", "December 31st - 2026", "2026-2028", "12/31/2026" */
@@ -2174,7 +2187,7 @@ const firebaseAvailable = (typeof firebase !== 'undefined');
 function arrToMap(arr){ const m={}; (arr||[]).forEach(x=>{ if(x&&x.id) m[x.id]=x; }); return m; }
 function mapToArr(m){ return m ? Object.keys(m).map(k=>m[k]) : []; }
 function blankState(){ return {meta:{appTitle:'Cirri'},people:[],okrs:[],projects:[],tasks:[],events:[],activity:[],hc_employees:[],hc_reqs:[],hc_attritionLog:[],hc_leaders:[],hc_history:[],feature_requests:[],comments:[],notes:[],checkins:[],takes:[],hcSettings:{},hc_activity:[],approvals:[],wbr_metrics:[],wbr_entries:[],wbr_periods:[],wbrSettings:{}}; }
-function normState(st){ const b=blankState(); if(!st||typeof st!=='object') return b; return { meta:st.meta||b.meta, people:Array.isArray(st.people)?st.people:[], okrs:Array.isArray(st.okrs)?st.okrs:[], projects:Array.isArray(st.projects)?st.projects:[], tasks:Array.isArray(st.tasks)?st.tasks:[], events:Array.isArray(st.events)?st.events:[], activity:Array.isArray(st.activity)?st.activity:[], hc_employees:Array.isArray(st.hc_employees)?st.hc_employees:[], hc_reqs:Array.isArray(st.hc_reqs)?st.hc_reqs:[], hc_attritionLog:Array.isArray(st.hc_attritionLog)?st.hc_attritionLog:[], hc_leaders:Array.isArray(st.hc_leaders)?st.hc_leaders:[], hc_history:Array.isArray(st.hc_history)?st.hc_history:[], feature_requests:Array.isArray(st.feature_requests)?st.feature_requests:[], comments:Array.isArray(st.comments)?st.comments:[], hcSettings:(st.hcSettings&&typeof st.hcSettings==='object')?st.hcSettings:{}, hc_activity:Array.isArray(st.hc_activity)?st.hc_activity:[], approvals:Array.isArray(st.approvals)?st.approvals:[], notes:Array.isArray(st.notes)?st.notes:[], checkins:Array.isArray(st.checkins)?st.checkins:[], sessions:Array.isArray(st.sessions)?st.sessions:[], takes:Array.isArray(st.takes)?st.takes:[], wbr_metrics:Array.isArray(st.wbr_metrics)?st.wbr_metrics:[], wbr_entries:Array.isArray(st.wbr_entries)?st.wbr_entries:[], wbr_periods:Array.isArray(st.wbr_periods)?st.wbr_periods:[], wbrSettings:(st.wbrSettings&&typeof st.wbrSettings==='object')?st.wbrSettings:{} }; }
+function normState(st){ const b=blankState(); if(!st||typeof st!=='object') return b; return { meta:st.meta||b.meta, people:Array.isArray(st.people)?st.people:[], okrs:Array.isArray(st.okrs)?st.okrs:[], projects:(Array.isArray(st.projects)?st.projects:[]).map(projNormStatus), tasks:Array.isArray(st.tasks)?st.tasks:[], events:Array.isArray(st.events)?st.events:[], activity:Array.isArray(st.activity)?st.activity:[], hc_employees:Array.isArray(st.hc_employees)?st.hc_employees:[], hc_reqs:Array.isArray(st.hc_reqs)?st.hc_reqs:[], hc_attritionLog:Array.isArray(st.hc_attritionLog)?st.hc_attritionLog:[], hc_leaders:Array.isArray(st.hc_leaders)?st.hc_leaders:[], hc_history:Array.isArray(st.hc_history)?st.hc_history:[], feature_requests:Array.isArray(st.feature_requests)?st.feature_requests:[], comments:Array.isArray(st.comments)?st.comments:[], hcSettings:(st.hcSettings&&typeof st.hcSettings==='object')?st.hcSettings:{}, hc_activity:Array.isArray(st.hc_activity)?st.hc_activity:[], approvals:Array.isArray(st.approvals)?st.approvals:[], notes:Array.isArray(st.notes)?st.notes:[], checkins:Array.isArray(st.checkins)?st.checkins:[], sessions:Array.isArray(st.sessions)?st.sessions:[], takes:Array.isArray(st.takes)?st.takes:[], wbr_metrics:Array.isArray(st.wbr_metrics)?st.wbr_metrics:[], wbr_entries:Array.isArray(st.wbr_entries)?st.wbr_entries:[], wbr_periods:Array.isArray(st.wbr_periods)?st.wbr_periods:[], wbrSettings:(st.wbrSettings&&typeof st.wbrSettings==='object')?st.wbrSettings:{} }; }
 function wbrFreshSeed(){ const w=JSON.parse(JSON.stringify({metrics:WBR_SEED.metrics, entries:WBR_SEED.entries, periods:WBR_SEED.periods, settings:WBR_SEED.settings})); try{ const byId={}; w.metrics.forEach(m=>{byId[m.id]=m;}); wbrBuildFinance(byId,{}).metrics.forEach(m=>w.metrics.push(m)); }catch(e){} return w; }
 function freshSeed(){ const s=JSON.parse(JSON.stringify(SEED)); try{ const hc=hcFreshSeed(); s.hc_employees=hc.employees; s.hc_reqs=hc.reqs; s.hc_attritionLog=hc.attritionLog; s.hc_leaders=hc.leaders; s.hc_history=hc.history||[]; s.hcSettings=hc.settings; }catch(e){} try{ const w=wbrFreshSeed(); s.wbr_metrics=w.metrics; s.wbr_entries=w.entries; s.wbr_periods=w.periods; s.wbrSettings=w.settings; }catch(e){} return s; }
 
@@ -2640,6 +2653,7 @@ const OKR_AFIELDS=[['theme','name'],['objective','vision narrative'],['ownerId',
       deleteEntity('okrs', id, projFix.map(o=>({coll:'projects',obj:o})));
     },
     saveProject:(p)=>{
+      p=projNormStatus(p);
       const prev = p.id ? maps.project[p.id] : null;
       const out = {...p, id:p.id||uid('pr'), createdAt:p.createdAt||(prev&&prev.createdAt)||nowISO(), lastActivity:nowISO()};
       if(isClosedStatus(out.status) && !out.doneAt) out.doneAt=nowISO(); if(!isClosedStatus(out.status) && out.doneAt) out.doneAt=null;
@@ -2838,6 +2852,15 @@ function HealthDot({value, status}){
   }
   const d=HEALTH[value]||HEALTH.on_track; return React.createElement('span',{className:'hdot',style:{background:d.color},title:d.label});
 }
+/* how a project's stage is shown everywhere: gold bolt, seafoam sparkle, quiet ring, navy stamp, hollow stamp */
+function StageBadge({stage}){
+  if(stage==='active') return React.createElement('span',{className:'bolt'},React.createElement('span',{className:'z'},React.createElement(Icon,{name:'zap',size:9,fill:'currentColor'})),'Active');
+  if(stage==='stretch') return React.createElement(StretchBadge);
+  if(stage==='done'||stage==='abandoned') return React.createElement(DoneStamp,{status:stage});
+  return React.createElement('span',{className:'pill-s s-grey has-dot'},React.createElement('span',{className:'stg st-not_started'}),'Queued');
+}
+/* a row that can hold either: a project shows its stage, a task its status */
+function StatusBadge({x}){ if(!x) return null; const isProj=x.title===undefined && x.name!==undefined; return isProj? React.createElement(StageBadge,{stage:projStage(x)}) : React.createElement(Pill,{kind:'status',value:x['status']}); }
 function DoneStamp({status}){ const done=status==='done'; return React.createElement('span',{className:'stamp-done'+(done?'':' abd')}, done?'\u2713 Complete':'Abandoned'); }
 function DueTag({date,status}){
   if(!date) return React.createElement('span',{className:'muted tiny'},'No date');
@@ -3034,17 +3057,17 @@ function ProjectForm({initial, onSave, onClose, people, okrs, lockOkr}){
     React.createElement(Field,{label:'Contingent on (optional)',hint:'projects that have to succeed for this one to succeed. It shows as Contingent until they are done.'},
       React.createElement(DependsPick,{kind:'project',selfId:f.id,value:f.dependsOn||[],onChange:v=>up('dependsOn',v)})),
     React.createElement('div',{className:'f-row'},
-      React.createElement(Field,{label:'Status'}, React.createElement(EnumSelect,{value:f.status,onChange:v=>up('status',v),options:STATUS})),
       React.createElement(Field,{label:'Health'}, React.createElement(EnumSelect,{value:f.health,onChange:v=>up('health',v),options:HEALTH}))),
-    f.status==='blocked' && React.createElement(Field,{label:'Blocker',hint:'what is in the way?'}, React.createElement('textarea',{className:'inp',value:f.blocker,placeholder:'Describe the blocker and who needs to clear it',onChange:e=>up('blocker',e.target.value)})),
     React.createElement('div',{style:{background:'var(--panel-2)',border:'1px solid var(--line)',borderRadius:10,padding:'12px 14px',margin:'4px 0 14px'}},
       React.createElement('div',{className:'section-title',style:{margin:'0 0 10px'}},'Prioritization'),
+      React.createElement(Field,{label:'Stage',hint:'Active = committed and being worked now. Stretch = above-and-beyond ambition, no committed date. Queued = waiting its turn. Done = finished. Abandoned = stopped without finishing.'},
+          React.createElement('div',{className:'seg stage-seg'},
+            React.createElement('button',{type:'button',className:projStage(f)==='active'?'on':'',onClick:()=>setF(x=>projWithStage(x,'active'))},boltLabel('Active',12)),
+            React.createElement('button',{type:'button',className:projStage(f)==='stretch'?'on':'',onClick:()=>setF(x=>projWithStage(x,'stretch'))},[React.createElement(Icon,{key:'i',name:'sparkles',size:12}),' Stretch']),
+            React.createElement('button',{type:'button',className:projStage(f)==='queued'?'on':'',onClick:()=>setF(x=>projWithStage(x,'queued'))},'Queued'),
+            React.createElement('button',{type:'button',className:projStage(f)==='done'?'on':'',onClick:()=>setF(x=>projWithStage(x,'done'))},[React.createElement(Icon,{key:'i',name:'check',size:12}),' Done']),
+            React.createElement('button',{type:'button',className:projStage(f)==='abandoned'?'on':'',onClick:()=>setF(x=>projWithStage(x,'abandoned'))},'Abandoned'))),
       React.createElement('div',{className:'f-row'},
-        React.createElement(Field,{label:'Queue',hint:'active = committed and being worked now. Stretch = above-and-beyond ambition, no committed date. In queue = waiting its turn.'},
-          React.createElement('div',{className:'seg',style:{width:'fit-content'}},
-            React.createElement('button',{type:'button',className:f.queue==='active'?'on':'',onClick:()=>up('queue','active')},boltLabel('Active',12)),
-            React.createElement('button',{type:'button',className:f.queue==='stretch'?'on':'',onClick:()=>up('queue','stretch')},[React.createElement(Icon,{key:'i',name:'sparkles',size:12}),' Stretch']),
-            React.createElement('button',{type:'button',className:(f.queue!=='active'&&f.queue!=='stretch')?'on':'',onClick:()=>up('queue','queued')},'In queue'))),
         scale('effort','Level of effort (1-10)','10 = long & hard'),
         scale('impact','Impact (1-10)','10 = massive')),
       f.queue==='active'
@@ -3646,6 +3669,10 @@ function ProjectDrawer({project}){
   const GCT=useGuardedCreate('task','task.create',A.saveTask,{ownerIds:[project.ownerId].filter(Boolean),project});
   /* Moving into active is its own permission. If it needs approval the change is held, not written. */
   const actV=PM.can('project.activate',{ownerId:project.ownerId}); const [actHeld,setActHeld]=useState(null);
+  const setStage=(v)=>{ if(v===projStage(project)) return;
+    if(v==='done'){ openTasks.length? setConfirmDone(true) : completeProject(false); return; }
+    if(v==='active'){ if(!isClosedStatus(project.status)) return toggleQueue(); if(actV.allow) return A.saveProject(projWithStage(project,'active')); alert('Making a project active is not in your permission set. Reopen it as Queued, then ask for it to be activated.'); return; }
+    A.saveProject(projWithStage(project,v)); };
   const toggleQueue=()=>{ if(isActiveProj(project)) return A.saveProject({...project,queue:'queued'});
     const next={...project,queue:'active'};
     if(actV.allow) return A.saveProject(next);
@@ -3681,10 +3708,8 @@ function ProjectDrawer({project}){
             ? React.createElement(DoneStamp,{status:project.status})
             : React.createElement('span',{style:{display:'inline-flex',alignItems:'center',cursor:'pointer'},title:'See the tasks driving this',onClick:()=>setRisk(true)}, React.createElement(Pill,{kind:'health',value:project.health}), React.createElement('span',{style:{marginLeft:3,opacity:.5,fontSize:10}},'\u203a')),
           project.sensitive&&React.createElement('span',{className:'pill-s s-navy','data-tip':'Sensitive: only the owner, named people, task holders and the owner\u2019s reporting line up can see this. You can because '+(vis.why(project)||'you may')+'.'},React.createElement(Icon,{name:'lock',size:11}),' Sensitive'),
-          React.createElement(Pill,{kind:'status',value:project.status}),
-          React.createElement(ProjMarks,{p:project}),
-          isActiveProj(project)&&React.createElement('span',{className:'bolt'},React.createElement('span',{className:'z'},React.createElement(Icon,{name:'zap',size:9,fill:'currentColor'})),'Active'),
-          isStretchProj(project)&&React.createElement(StretchBadge))),
+          React.createElement(InlinePick,{value:projStage(project), options:PROJ_STAGE_ORDER.map(k=>({id:k,label:PROJ_STAGE[k]})), onSave:(v)=>setStage(v), render:(v)=>React.createElement(StageBadge,{stage:v})}),
+          React.createElement(ProjMarks,{p:project}))),
       !isClosedStatus(project.status)&&!ro&&React.createElement('button',{className:'btn sm primary',title:openTasks.length?openTasks.length+' open task'+(openTasks.length===1?'':'s')+' under this project':'Mark this project done',onClick:()=>{ openTasks.length?setConfirmDone(true):completeProject(false); }},iLabel('check','Complete',13)),
       !isClosedStatus(project.status)&&!ro&&(isActiveProj(project)||actV.allow||actV.needsApproval)&&React.createElement('button',{className:'btn sm'+(isActiveProj(project)?'':' secondary'),'data-tip':isActiveProj(project)?'Move this project back to the queue':((actV.needsApproval)?'Needs approval - the change is held until they say yes':'Commit to this project now'),onClick:toggleQueue}, isActiveProj(project)?'Deactivate':boltLabel('Activate',12)),
       ro? React.createElement('span',{className:'pill-s s-grey','data-tip':ro},React.createElement(Icon,{name:'lock',size:11}),' Read only') : React.createElement('button',{className:'btn sm',onClick:()=>setEdit(true)},'Edit'),
@@ -4000,7 +4025,7 @@ function ProjectsView(){
     if(fOwner && p.ownerId!==fOwner) return false;
     if(fHealth && p.health!==fHealth) return false;
     if(fStatus && p.status!==fStatus) return false;
-    if(fQueue && (isClosedStatus(p.status) || projQueueOf(p)!==fQueue)) return false;
+    if(fQueue && projStage(p)!==fQueue) return false;
     if(fOkr && !(p.okrIds||[]).includes(fOkr)) return false;
     return true;
   });
@@ -4027,7 +4052,7 @@ function ProjectsView(){
           : React.createElement('span',{style:{display:'inline-flex',alignItems:'center',cursor:'pointer'},title:'See driving tasks',onClick:(e)=>{e.stopPropagation();setRiskProj(p);}}, React.createElement(Pill,{kind:'health',value:p.health}), React.createElement('span',{style:{marginLeft:3,opacity:.5,fontSize:10}},'\u203a'))),
       React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
         owner?React.createElement('span',{style:{display:'inline-flex',gap:5,alignItems:'center'}},React.createElement(Avatar,{person:owner,size:'sm'}),React.createElement('span',{className:'tiny muted'},owner.name.split(' ')[0])):React.createElement('span',{className:'tiny muted'},'Unassigned'),
-        React.createElement(React.Fragment,null,React.createElement(ProjMarks,{p}),React.createElement(Pill,{kind:'status',value:p.status})),
+        React.createElement(React.Fragment,null,React.createElement(ProjMarks,{p}),React.createElement(StageBadge,{stage:projStage(p)})),
         React.createElement(DueTag,{date:p.dueDate,status:p.status}),
         React.createElement(EIChips,{p}),
         React.createElement('span',{className:'tiny muted',style:{opacity:.5}},'\u00b7'),
@@ -4063,12 +4088,9 @@ function ProjectsView(){
         React.createElement('select',{className:'inp',style:{width:'auto'},value:fOkr,onChange:e=>setFOkr(e.target.value)}, React.createElement('option',{value:''},'All objectives'), okrs.map(o=>React.createElement('option',{key:o.id,value:o.id},'O'+o.num+' '+o.theme))),
         React.createElement('select',{className:'inp',style:{width:'auto'},value:fOwner,onChange:e=>setFOwner(e.target.value)}, React.createElement('option',{value:''},'All owners'), people.map(p=>React.createElement('option',{key:p.id,value:p.id},p.name))),
         React.createElement('select',{className:'inp',style:{width:'auto'},value:fHealth,onChange:e=>setFHealth(e.target.value)}, React.createElement('option',{value:''},'All health'), HEALTH_ORDER.map(h=>React.createElement('option',{key:h,value:h},HEALTH[h].label))),
-        React.createElement('select',{className:'inp',style:{width:'auto'},value:fStatus,onChange:e=>setFStatus(e.target.value)}, React.createElement('option',{value:''},'All statuses'), STATUS_ORDER.map(st=>React.createElement('option',{key:st,value:st},STATUS[st].label))),
         React.createElement('select',{className:'inp',style:{width:'auto'},value:fQueue,onChange:e=>setFQueue(e.target.value)},
-          React.createElement('option',{value:''},'Active & queued'),
-          React.createElement('option',{value:'active'},'Active only'),
-          React.createElement('option',{value:'stretch'},'Stretch only'),
-          React.createElement('option',{value:'queued'},'Queued only')),
+          React.createElement('option',{value:''},'All stages'),
+          PROJ_STAGE_ORDER.map(k=>React.createElement('option',{key:k,value:k},PROJ_STAGE[k]))),
         (fOwner||fStatus||fQueue||fHealth||fOkr||q) && React.createElement('button',{className:'btn sm',onClick:()=>{setQ('');setFOwner('');setFHealth('');setFStatus('');setFOkr('');setFQueue('');}},'Clear filters'),
         React.createElement('select',{className:'inp',style:{width:'auto'},title:'Sort',value:sortBy,onChange:e=>{setSortBy(e.target.value);setSortEI(null);}},
           React.createElement('option',{value:'default'},'Sort: Active first'),
@@ -4091,7 +4113,7 @@ function ProjectsView(){
               onChange:e=>{ const v=e.target.checked; const n=Object.assign({},sel); rows.forEach(p=>{n[p.id]=v;}); setSel(n); }})),
           ['Project','Owner','Objectives'].map(h=>React.createElement('th',{key:h},h)),
           [['impact','Impact'],['effort','LOE']].map(([col,lab])=>React.createElement('th',{key:col,className:'c',style:{cursor:'pointer',whiteSpace:'nowrap'},title:'Sort by '+lab.toLowerCase(),onClick:()=>cycleSort(col)}, lab, sortEI&&sortEI.col===col?React.createElement(Icon,{name:sortEI.dir===-1?'chevron-down':'chevron-up',size:11,style:{marginLeft:2}}):null)),
-          ['Health','Status','Due'].map(h=>React.createElement('th',{key:h},h)))),
+          ['Health','Stage','Due'].map(h=>React.createElement('th',{key:h},h)))),
         React.createElement('tbody',null, rows.map(p=>{
           const okrChips=(p.okrIds||[]).map(id=>maps.okr[id]).filter(Boolean);
           return React.createElement('tr',{key:p.id,className:(isClosedStatus(p.status)?'proj-done':'')+(isActiveProj(p)?' proj-active-tr':'')+(isStretchProj(p)?' proj-stretch-tr':'')+(sel[p.id]?' wbr-selected':''),onClick:()=>nav.openProject(p.id)},
@@ -4115,7 +4137,7 @@ function ProjectsView(){
             React.createElement('td',null, isClosedStatus(p.status)
               ? React.createElement(DoneStamp,{status:p.status})
               : React.createElement('span',{style:{display:'inline-flex',alignItems:'center',cursor:'pointer'},onClick:(e)=>{e.stopPropagation();setRiskProj(p);},title:'See driving tasks'}, React.createElement(Pill,{kind:'health',value:p.health}), React.createElement('span',{style:{marginLeft:3,opacity:.5,fontSize:10}},'\u203a'))),
-            React.createElement('td',null, React.createElement(React.Fragment,null,React.createElement(ProjMarks,{p}),React.createElement(Pill,{kind:'status',value:p.status}))),
+            React.createElement('td',null, React.createElement(React.Fragment,null,React.createElement(ProjMarks,{p}),React.createElement(StageBadge,{stage:projStage(p)}))),
             React.createElement('td',null, React.createElement(DueTag,{date:p.dueDate,status:p.status})));
         }))),
       rows.length===0 && React.createElement('div',{className:'empty'},'No projects match these filters.'))
@@ -4724,7 +4746,7 @@ function WorkList({items, kind, onPick, hideOverdue, onComplete}){
         sub&&React.createElement('div',{className:'wrow-sub'}, sub)),
       !hideOverdue&&isOverdue(it.dueDate,it.status)&&React.createElement('span',{className:'pill-s s-red'},'overdue'),
       React.createElement('span',{className:'wcell-date tiny muted'}, it.dueDate?fmtDateShort(it.dueDate):''),
-      React.createElement('span',{className:'wcell-status'}, React.createElement(Pill,{kind:'status',value:it.status})));
+      React.createElement('span',{className:'wcell-status'}, React.createElement(StatusBadge,{x:it})));
   });
 }
 function RSection({title, tone, items, kind, onPick, renderItem, empty, hideOverdue, defaultCollapsed, onComplete}){
@@ -4888,7 +4910,7 @@ function RhythmView({person, onPick, all, onlyIds}){
       canDate
         ? React.createElement(InlineDate,{value:x.dueDate,onCommit:(v)=>{ kind==='project'?A.saveProject({...x,dueDate:v}):A.saveTask({...x,dueDate:v}); }})
         : React.createElement('span',{className:'wcell-date tiny muted'}, x.dueDate?fmtDateShort(x.dueDate):'\u2014'),
-      React.createElement('span',{className:'wcell-status'}, React.createElement(Pill,{kind:'status',value:x.status})));
+      React.createElement('span',{className:'wcell-status'}, React.createElement(StatusBadge,{x})));
   };
   const attRow=(r)=>nRow(r.kind,r.x, r.reasons.filter(rr=>rr.t!=='blocked').map((rr,i)=>React.createElement('span',{key:'r'+i,className:'pill-s '+rr.cls},rr.t)));
 
@@ -7887,9 +7909,9 @@ function ProjBulkBar({ids, onClear}){
     React.createElement('select',{className:'wbr-sel',value:'',onChange:e=>{ const v=e.target.value; if(v) each(p=>A.saveProject({...p,health:v})); e.target.value=''; }},
       React.createElement('option',{value:''},'Set health\u2026'),
       HEALTH_ORDER.map(h=>React.createElement('option',{key:h,value:h},HEALTH[h].label))),
-    React.createElement('select',{className:'wbr-sel',value:'',onChange:e=>{ const v=e.target.value; if(v) each(p=>A.saveProject({...p,status:v})); e.target.value=''; }},
-      React.createElement('option',{value:''},'Set status\u2026'),
-      STATUS_ORDER.map(s=>React.createElement('option',{key:s,value:s},STATUS[s].label))),
+    React.createElement('select',{className:'wbr-sel',value:'',onChange:e=>{ const v=e.target.value; if(v) each(p=>A.saveProject(projWithStage(p,v))); e.target.value=''; }},
+      React.createElement('option',{value:''},'Set stage\u2026'),
+      PROJ_STAGE_ORDER.map(k=>React.createElement('option',{key:k,value:k},PROJ_STAGE[k]))),
     React.createElement('button',{className:'btn sm',onClick:()=>each(p=>A.saveProject({...p,queue:'active'}))},'Make active'),
     React.createElement('button',{className:'btn sm',onClick:()=>each(p=>A.saveProject({...p,queue:'queued'}))},'Move to queue'),
     React.createElement('button',{className:'btn sm danger',onClick:()=>setConfirm(true)},'Delete'),
