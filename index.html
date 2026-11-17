@@ -1093,6 +1093,8 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .succ-if-t{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.5;color:var(--ink)}
 .stage-seg{width:fit-content;max-width:100%;flex-wrap:wrap}
 .stage-seg button{white-space:nowrap}
+.login-google.login-sso{background:var(--deep);border-color:var(--deep);color:#fff}
+.login-google.login-sso:hover{background:#03243c;border-color:#03243c;color:#fff}
 </style>
 </head>
 <body>
@@ -1115,6 +1117,12 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "187864317654",
   appId: "1:187864317654:web:f48f447ce9843a611ad377"
 };
+/* SINGLE SIGN-ON. Like FIREBASE_CONFIG, this belongs to the edition, not the workspace: the sign-in screen
+   is drawn before anybody is signed in, so it cannot read a setting out of the database. id is the provider
+   id Firebase shows for the OpenID Connect provider (Authentication > Sign-in method); label is the button.
+   null = Google only. Whoever signs in, by either route, is matched to the roster by the email on their
+   session exactly as before - permissions, pay scope and the database rules never look at the route. */
+const SIGNIN_SSO = {id:'oidc.okta', label:'Okta'};
 // Optional: lock access to specific Google accounts (lowercase emails).
 // Leave empty [] to allow anyone who signs in with Google + knows the URL.
 /* ============================================================
@@ -1152,7 +1160,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-16-1519';
+const BUILD='2026-11-17-0933';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2399,11 +2407,17 @@ function StoreProvider({children}){
 
   useEffect(()=>{ try{ localStorage.setItem(LS_ME, me);}catch(e){} },[me]);
 
-  const signIn = useCallback(()=>{
+  const signIn = useCallback((how)=>{
     try{
-      const provider = new firebase.auth.GoogleAuthProvider();
-      if(window.__installed) firebase.auth().signInWithRedirect(provider).catch(e=>flash('Sign-in failed: '+e.message));
-      else firebase.auth().signInWithPopup(provider).catch(e=>flash('Sign-in failed: '+e.message));
+      const sso=(how==='sso' && SIGNIN_SSO);
+      const provider = sso? new firebase.auth.OAuthProvider(SIGNIN_SSO.id) : new firebase.auth.GoogleAuthProvider();
+      if(sso){ provider.addScope('email'); provider.addScope('profile'); }
+      const fail=(e)=>flash(e&&e.code==='auth/account-exists-with-different-credential'
+        ? 'This email has already signed in another way. Use that way, or ask the workspace owner to remove the old sign-in in Firebase.'
+        : e&&e.code==='auth/operation-not-allowed'? (sso? SIGNIN_SSO.label+' sign-in is not switched on for this workspace yet.' : 'Google sign-in is not switched on for this workspace.')
+        : 'Sign-in failed: '+((e&&e.message)||e));
+      if(window.__installed) firebase.auth().signInWithRedirect(provider).catch(fail);
+      else firebase.auth().signInWithPopup(provider).catch(fail);
     }catch(e){ flash('Auth not ready'); }
   },[flash]);
   const signOut = useCallback(()=>{ try{ sessionStorage.removeItem(('cirri_session@'+LS_NS)); sessionStorage.removeItem(('cirri_chat@'+LS_NS)); }catch(e){} try{ firebase.auth().signOut(); }catch(e){} },[]);   /* a sign-out, by hand or by timeout, starts a fresh Ask Cirri session */
@@ -5127,8 +5141,10 @@ function AuthScreen(){
         React.createElement('div',{className:'login-kicker'},'Company brain'),
         React.createElement('h1',{className:'login-h1'}, lastName?('Welcome back, '+lastName):'Welcome'),
         React.createElement('p',{className:'login-sub'},'Sign in to the live, shared record of the company - objectives, projects, metrics, people, and cost in one place.'),
-        React.createElement('button',{className:'login-google',onClick:signIn}, GOOGLE_G, 'Continue with Google'),
+        SIGNIN_SSO? React.createElement('button',{className:'login-google login-sso',onClick:()=>signIn('sso')}, React.createElement(Icon,{name:'lock',size:16}), 'Continue with '+SIGNIN_SSO.label)
+          : React.createElement('button',{className:'login-google',onClick:()=>signIn('google')}, GOOGLE_G, 'Continue with Google'),
         React.createElement('div',{className:'tiny muted',style:{textAlign:'center',marginTop:14}},'Authorized team members only.'),
+        SIGNIN_SSO? React.createElement('div',{className:'linkish tiny',style:{marginTop:10,textAlign:'center'},onClick:()=>signIn('google')},'Workspace owner? Sign in with Google') : null,
         React.createElement('div',{className:'linkish tiny',style:{marginTop:26,textAlign:'center'},onClick:()=>setSetup(true)},'Set up / change the team database')),
       React.createElement('div',{className:'login-foot tiny muted'},'The company, in one clear view.')),
     React.createElement('div',{className:'login-right'},
