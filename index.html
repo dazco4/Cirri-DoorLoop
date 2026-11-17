@@ -262,8 +262,11 @@ tr.proj-active-tr:hover td{background:rgba(245,197,24,.10)}
 .okr-title{display:block;width:100%;font-weight:800;font-size:20px;line-height:1.28;letter-spacing:-.4px;text-wrap:balance}
 .okr-title-sm{display:block;width:100%;font-weight:800;font-size:19px;line-height:1.28;letter-spacing:-.3px;color:var(--deep);text-wrap:balance}
 .okr-grid>.card{display:flex;flex-direction:column}
-.okr-drag{cursor:grab}
-.okr-drag:active{cursor:grabbing}
+.okr-drag{position:relative}
+.okr-grip{position:absolute;left:-10px;top:20px;width:20px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:var(--panel);border:1px solid var(--line-strong);color:var(--muted-2);cursor:grab;opacity:0;transition:opacity .12s;z-index:2;box-shadow:0 1px 4px rgba(0,22,40,.08)}
+.okr-drag:hover .okr-grip,.okr-drag.dragging .okr-grip{opacity:1}
+.okr-grip:hover{color:var(--deep)}
+.okr-grip:active{cursor:grabbing}
 .okr-drag.dragging{opacity:.45}
 .okr-drag.drag-over{outline:2px dashed var(--accent-700);outline-offset:4px;border-radius:18px}
 .okr-drag>.card{height:100%}
@@ -1158,7 +1161,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-17-0955';
+const BUILD='2026-11-17-1030';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -4289,9 +4292,6 @@ function OkrsView(){
       !GCO.hidden&&React.createElement('button',{className:'btn primary','data-tip':GCO.tip,onClick:()=>setAdd(true)},'+ New objective')),
     React.createElement('div',{className:'okr-grid'}, live.map(o=>React.createElement('div',{key:o.id,
         className:'okr-drag'+(dragId===o.id?' dragging':'')+((overId===o.id&&dragId&&dragId!==o.id)?' drag-over':''),
-        draggable:true,
-        onDragStart:(e)=>{ if(e.target.closest&&e.target.closest('button,input,textarea,select,a,.linkish')){e.preventDefault();return;} setDragId(o.id); try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',o.id);}catch(err){} },
-        onDragEnd:()=>{setDragId(null);setOverId(null);},
         onDragOver:(e)=>{ e.preventDefault(); if(dragId&&o.id!==dragId&&overId!==o.id) setOverId(o.id); },
         onDrop:(e)=>{ e.preventDefault();
           if(dragId&&dragId!==o.id){
@@ -4301,6 +4301,10 @@ function OkrsView(){
               writeMany(next.map((x,i)=>({coll:'okrs',obj:{...x,num:i+1}}))); }
           }
           setDragId(null); setOverId(null); }},
+      /* The drag lives on this grip, never on the card: a draggable card cannot have its text selected. */
+      React.createElement('span',{className:'okr-grip',title:'Drag to reorder',draggable:true,
+        onDragStart:(e)=>{ setDragId(o.id); try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',o.id); const card=e.currentTarget.parentElement; if(card&&e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(card,24,24); }catch(err){} },
+        onDragEnd:()=>{setDragId(null);setOverId(null);}}, React.createElement(Icon,{name:'menu',size:13})),
       React.createElement(OkrCard,{okr:o})))),
     doneL.length>0&&React.createElement('div',{style:{marginTop:22}},
       React.createElement('div',{className:'section-title done-band',style:{marginBottom:10,cursor:'pointer'},onClick:()=>setShowDone(v=>!v)}, React.createElement('span',{style:{display:'flex',alignItems:'center',gap:8}}, React.createElement(Icon,{name:showDone?'chevron-down':'chevron-right',size:13}), 'Completed ('+doneL.length+')')),
