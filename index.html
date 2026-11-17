@@ -905,8 +905,6 @@ select.inp.acc-sel{width:auto;flex:0 0 auto;padding:4px 26px 4px 8px;font-size:1
 .gen-item:hover{background:var(--sky-100);color:var(--ink)}
 .gen-item.on{background:var(--deep);color:#fff}
 .gen-body{min-width:0}
-.tb-company{display:inline-flex;align-items:center;gap:7px;padding:3px 9px 3px 4px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;font-weight:700;color:var(--ink);margin:0 2px 0 6px;flex:0 0 auto;max-width:200px}
-.tb-company span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .login-company{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:700;color:var(--ink);margin-bottom:10px;padding:6px 12px 6px 6px;border:1px solid var(--line);border-radius:999px;background:#fff}
 [data-tip].tip-up:hover::after{top:auto;bottom:calc(100% + 7px)}
 /* The AI identity: teal into violet into navy. A thin ring travels around the Ask
@@ -1160,7 +1158,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-17-0933';
+const BUILD='2026-11-17-0955';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -13212,7 +13210,6 @@ function App(){
     React.createElement('div',{className:'app'},
       React.createElement('div',{className:'topbar'},
         React.createElement('div',{className:'tb-logo',title:'Cirri'},React.createElement(Octo,{size:24,tile:true,rx:8})),
-        WSR.name? React.createElement('div',{className:'tb-company',title:'This is '+WSR.name+'\u2019s workspace'}, React.createElement(CompanyMark,{name:WSR.name,logo:(g.state.meta.workspace||{}).logo,size:22}), React.createElement('span',null,WSR.name)) : null,
         React.createElement('div',{className:'appsw',style:{position:'relative',flex:'0 0 auto'}},
           React.createElement('button',{className:'tb-app',onClick:()=>setSwOpen(o=>!o),title:'Switch app'},
             nameOf('app:'+curApp.id,curApp.label),
