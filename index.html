@@ -1115,6 +1115,10 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .sce-goal .inp{width:110px;padding:6px 9px;font-variant-numeric:tabular-nums}
 .sce-goal .inp.bad{border-color:var(--red)}
 .sce-top{flex-wrap:wrap}
+.hc-prof{display:flex;gap:16px;align-items:flex-start;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
+.hc-prof-b{flex:1 1 auto;min-width:0}
+.hc-prof-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.hc-intro{margin:0 0 14px;font-size:13.5px;line-height:1.55;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -1180,7 +1184,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-17-1233';
+const BUILD='2026-11-17-1326';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2873,7 +2877,7 @@ function PersonProfileModal({person, onClose}){
       React.createElement('div',{style:{fontWeight:800,fontSize:22,marginTop:16,color:'var(--ink)'}}, p.name),
       p.role && React.createElement('div',{className:'muted',style:{fontSize:13.5,marginTop:3,fontWeight:600}}, p.role),
       React.createElement('div',{style:{marginTop:16,fontSize:14,lineHeight:1.6,color:'var(--ink-soft)',maxWidth:460}},
-        p.bio ? p.bio : React.createElement('span',{className:'muted',style:{fontStyle:'italic'}}, 'No intro yet - add a blurb for '+first+' in the Team section.'))));
+        p.bio ? p.bio : React.createElement('span',{className:'muted',style:{fontStyle:'italic'}}, 'No intro yet - add one for '+first+' on their record in People.'))));
 }
 function AvatarStack({ids, map, size, names}){
   const ppl=(ids||[]).map(i=>map[i]).filter(Boolean);
@@ -3331,13 +3335,13 @@ function OkrForm({initial,onSave,onClose,people}){
     React.createElement(Field,{label:'Success criteria'}, React.createElement(ScEditor,{items:f.successCriteria,onChange:v=>up('successCriteria',v)}))
   );
 }
-function resizeImageFile(file, cb){
+function resizeImageFile(file, cb, size){
   if(!file){ cb(''); return; }
   const reader=new FileReader();
   reader.onload=()=>{
     const img=new Image();
     img.onload=()=>{
-      const S=176, c=document.createElement('canvas'); c.width=S; c.height=S;
+      const S=size||176, c=document.createElement('canvas'); c.width=S; c.height=S;
       const ctx=c.getContext('2d');
       const scale=Math.max(S/img.width, S/img.height);
       const w=img.width*scale, h=img.height*scale;
@@ -10653,7 +10657,8 @@ function useHc(){
   };
 }
 /* ---------------- HC UI atoms (styled with the OKR design tokens) ---------------- */
-function HcAvatar({name,onLeave,size}){
+function HcAvatar({name,onLeave,size,photo}){
+  if(photo){ const z=size||30; return React.createElement('div',{style:{width:z,height:z,borderRadius:'50%',overflow:'hidden',flexShrink:0,background:'#dbe7f0',boxShadow:'inset 0 0 0 1px rgba(0,22,40,.1)'},title:name||''}, React.createElement('img',{src:photo,alt:name||'',style:{width:'100%',height:'100%',objectFit:'cover',display:'block'}})); }
   const s = size||30;
   return React.createElement('div',{style:{width:s,height:s,borderRadius:'50%',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:s*0.36,fontWeight:700,flexShrink:0,background:onLeave?'var(--amber-bg)':'var(--accent-bg)',color:onLeave?'var(--amber)':'var(--deep)',boxShadow:'inset 0 0 0 1px rgba(0,22,40,.10)'}}, hcInits(name));
 }
@@ -11113,7 +11118,7 @@ function HcLeaderRoster({leaderId}){
     return React.createElement('tr',{key:emp.id,style:{cursor:'pointer'},onClick:()=>hcx.openModal({type:'empDrawer',empId:emp.id})},
       React.createElement('td',{className:'tiny',style:{color:'var(--muted-2)',fontVariantNumeric:'tabular-nums',fontWeight:700}}, emp.reqNumber?('#'+emp.reqNumber):'\u2014'),
       React.createElement('td',null, React.createElement('div',{style:{display:'flex',alignItems:'center',gap:9}},
-        React.createElement(HcAvatar,{name:emp.name,onLeave:emp.onLeave,size:28}),
+        React.createElement(HcAvatar,{name:emp.name,onLeave:emp.onLeave,size:28,photo:emp.photoUrl}),
         React.createElement('div',null,
           React.createElement('div',{className:'linkish',style:{fontWeight:650,cursor:'pointer'},onClick:()=>hcx.openModal({type:'empDrawer',empId:emp.id})}, emp.name, isDL&&React.createElement('span',{className:'pill-s s-blue',style:{marginLeft:6,fontSize:9.5,padding:'1px 6px'}},'Leader')),
           emp.title&&React.createElement('div',{className:'tiny',style:{color:'var(--muted)'}},emp.title),
@@ -11219,7 +11224,7 @@ function HcOrgChart(){
     return React.createElement('div',{className:'oc-box'+(ok?'':' dim')+(opts.focus?' focus':'')+(isMe?' me':'')+(opts.small?' small':''),
         'data-tip': opts.focus? null : 'Centre the chart on '+e.name,
         onClick:()=>{ if(!ok) return; if(opts.focus) hcx.openModal({type:'empDrawer',empId:e.id}); else setFocus(e.id); }},
-      React.createElement(HcAvatar,{name:e.name,onLeave:e.onLeave,size:opts.small?24:30}),
+      React.createElement(HcAvatar,{name:e.name,onLeave:e.onLeave,size:opts.small?24:30,photo:e.photoUrl}),
       React.createElement('div',{className:'oc-txt'},
         React.createElement('div',{className:'oc-name'},e.name, isMe&&!opts.focus? React.createElement('span',{className:'tiny muted',style:{fontWeight:500}},' \u00b7 you'):null),
         ok? React.createElement('div',{className:'oc-sub'},(e.title||e.role||'')+(e.level?' \u00b7 '+hcLevelName(e.level):'')) : React.createElement('div',{className:'oc-sub'},lbl[e.leaderId]||'')),
@@ -11580,6 +11585,24 @@ function HcManagerPick({value,onChange,employees,label,selfId}){
     React.createElement(SearchSelect,{options:opts,value:cur,placeholder:'Search the roster\u2026',onChange:(id)=>{ const e=byId[id]; onChange(e? {id:e.id,name:e.name} : {id:'',name:''}); }}),
     (!cur && value)? React.createElement('div',{className:'tiny',style:{color:'var(--amber)',marginTop:4}},'Typed as "'+value+'" and not on the roster. Pick a person to link it, or leave blank.') : null);
 }
+/* Photo and intro on a person's record. The photo is cropped square and shrunk in the browser before it is
+   saved (128px, a few KB), because it lives on the record itself and everybody's roster loads together. */
+function HcProfileEdit({f, set}){
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState('');
+  const pick=(e)=>{ const file=e.target.files&&e.target.files[0]; e.target.value=''; if(!file) return; if(!/^image\//.test(file.type)){ setErr('Pick an image file (JPG or PNG).'); return; }
+    setErr(''); setBusy(true); resizeImageFile(file,(url)=>{ setBusy(false); if(url) set('photoUrl',url); else setErr('That image could not be read. Try a JPG or PNG.'); },128); };
+  const bio=String(f.bio||'');
+  return React.createElement('div',{className:'hc-prof'},
+    React.createElement(HcAvatar,{name:f.name||'?',size:68,photo:f.photoUrl}),
+    React.createElement('div',{className:'hc-prof-b'},
+      React.createElement('div',{className:'hc-prof-act'},
+        React.createElement('label',{className:'btn sm',style:{cursor:'pointer'}}, busy?'Reading\u2026':(f.photoUrl?'Change photo':'Upload photo'),
+          React.createElement('input',{type:'file',accept:'image/*',style:{display:'none'},onChange:pick})),
+        f.photoUrl? React.createElement('button',{type:'button',className:'btn sm ghost',onClick:()=>set('photoUrl','')},'Remove') : null,
+        React.createElement('span',{className:'tiny muted'}, err? React.createElement('span',{style:{color:'var(--red)'}},err) : 'Cropped to a square and shrunk before saving.')),
+      React.createElement('textarea',{className:'inp',rows:2,maxLength:280,value:bio,placeholder:'Intro: a line or two on what they do and what to ask them about.',onChange:e=>set('bio',e.target.value)}),
+      React.createElement('div',{className:'tiny muted',style:{textAlign:'right',marginTop:2}}, bio.length+' / 280')));
+}
 function HcEmpModal({leaderId,emp,onClose,mode}){
   const H=useHc();
   const M = mode || (emp?'edit':'add');
@@ -11609,6 +11632,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
     performance:f.performance||'Good', attrition:f.attrition||'', onLeave:!!f.onLeave, notes:f.notes||'',
     status:isHire?'active':((emp&&emp.status)||'active'),
     email:(f.email||'').trim().toLowerCase(), slackId:(f.slackId||'').trim(),
+    photoUrl:f.photoUrl||'', bio:String(f.bio||'').trim().slice(0,280),
     perfRatedAt:f.perfRatedAt||'', perfNote:f.perfNote||'',
     c1:f.c1||'',w1:parseFloat(f.w1)||0,t1:f.t1||'',ch1:f.c1==='CAC'?(f.ch1||''):'',
     c2:f.c2||'',w2:parseFloat(f.w2)||0,t2:f.t2||'',ch2:f.c2==='CAC'?(f.ch2||''):'',
@@ -11651,6 +11675,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
   return React.createElement(HcModalShell,{title:titleTxt,onClose,wide:true,
     footer:[React.createElement('button',{key:1,className:'btn',onClick:onClose},'Cancel'),
       React.createElement('button',{key:2,className:'btn primary',disabled:!canSave,onClick:save},saveTxt)]},
+    (!isMove)? React.createElement(HcProfileEdit,{f,set}) : null,
     isHire&&React.createElement('div',{className:'note',style:{marginTop:0,marginBottom:14,fontSize:12.5}}, 'Converting req #'+(emp.reqNumber||'')+' into a hire. This is the same record - the req number stays, and the conversion is logged to history. Fill in the person\u2019s details below.'),
     isMove&&React.createElement('div',{className:'note',style:{marginTop:0,marginBottom:14,fontSize:12.5}}, M==='promotion'?'Update the record for the promotion. The change is logged to this person\u2019s history as a promotion - the record is not duplicated.':'Update the record for the move. The change is logged to this person\u2019s history as a transfer - the record is not duplicated.'),
     isMove&&(function(){
@@ -11899,7 +11924,7 @@ function HcEmployeeDrawer({empId,onClose}){
     React.createElement('div',{className:'hc-drawer'},
       React.createElement('div',{className:'hc-drawer-h'},
         React.createElement('div',{style:{display:'flex',gap:12,alignItems:'center',minWidth:0}},
-          React.createElement(HcAvatar,{name:emp.name||(emp.title||'R'),onLeave:emp.onLeave,size:44}),
+          React.createElement(HcAvatar,{name:emp.name||(emp.title||'R'),onLeave:emp.onLeave,size:emp.photoUrl?56:44,photo:emp.photoUrl}),
           React.createElement('div',{style:{minWidth:0}},
             React.createElement('div',{style:{display:'flex',alignItems:'center',flexWrap:'wrap'}},
               React.createElement('span',{style:{fontWeight:800,fontSize:17}}, isOpen?(emp.title||'Open req'):emp.name), statusBadge),
@@ -11907,6 +11932,7 @@ function HcEmployeeDrawer({empId,onClose}){
         React.createElement('button',{className:'x',onClick:onClose},'\u00d7')),
       React.createElement('div',{className:'hc-drawer-b'},
         departed&&React.createElement('div',{className:'flag',style:{marginBottom:14}}, React.createElement(Icon,{name:'user-minus',size:13}),' Departed '+(emp.exitDate?fmtDateShort(emp.exitDate):'')+' \u00b7 '+(emp.attritionType||'').replace(' Attrition','')+(emp.exitReason?' \u00b7 '+emp.exitReason:'')),
+        (!isOpen && String(emp.bio||'').trim())? React.createElement('div',{className:'hc-intro'}, emp.bio) : null,
         isOpen&&React.createElement('div',{className:'note',style:{marginBottom:14,fontSize:12.5,borderLeftColor:'var(--amber)'}}, 'This is an open requisition. Convert it to a hire when the seat is filled - the record and its number carry over.'),
         infoGrid,
         (emp.teamTags||[]).length>0&&React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:4,marginBottom:14}}, (emp.teamTags||[]).map(t=>React.createElement('span',{key:t,className:'pill-s s-blue',style:{fontSize:10}},t))),
