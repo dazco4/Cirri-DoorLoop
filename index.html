@@ -1096,6 +1096,20 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .stage-seg button{white-space:nowrap}
 .login-google.login-sso{background:var(--deep);border-color:var(--deep);color:#fff}
 .login-google.login-sso:hover{background:#03243c;border-color:#03243c;color:#fff}
+.hr-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.hr-seg{flex-wrap:wrap}
+.hr-seg button{white-space:nowrap}
+.hr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:20px}
+.hr-tile{min-width:0}
+.hr-tile .l{flex-wrap:nowrap;white-space:normal}
+.hr-sub{font-size:11.5px;color:var(--ink-2);margin-top:5px;line-height:1.35;overflow-wrap:anywhere}
+.hr-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:20px}
+.hr-band{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:12.5px;color:var(--ink)}
+.hr-band-l{flex:0 0 118px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr-band-t{flex:1 1 auto;height:8px;border-radius:5px;background:#eef2f6;overflow:hidden}
+.hr-band-f{display:block;height:100%;background:var(--accent-700);border-radius:5px}
+.hr-band-n{flex:0 0 auto;min-width:26px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.hr-chart{min-width:0}
 </style>
 </head>
 <body>
@@ -1161,7 +1175,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-17-1030';
+const BUILD='2026-11-17-1130';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -3252,7 +3266,7 @@ function ScEditor({items,onChange}){
             React.createElement('span',{className:'sce-chip',title:m.name+' \u00b7 '+((W.secMap[m.sec]||{}).label||m.sec)},
               React.createElement(Icon,{name:'trending-up',size:13}),
               React.createElement('span',{className:'sce-chip-n'},m.name),
-              React.createElement('span',{className:'sce-chip-s'},((W.secMap[m.sec]||{}).label||m.sec)+(goal?' \u00b7 goal '+goal:'')+(wbrIsComputed(m)?' \u00b7 formula':''))),
+              React.createElement('span',{className:'sce-chip-s'},((W.secMap[m.sec]||{}).label||m.sec)+(goal?' \u00b7 goal '+goal:'')+(wbrIsDerived(m)?' \u00b7 formula':''))),
             React.createElement('button',{type:'button',className:'btn sm ghost',style:{flexShrink:0,whiteSpace:'nowrap'},onClick:()=>set(i,{metricId:''})},'Change'),
             React.createElement('button',{type:'button',className:'btn icon',title:'Remove criterion',onClick:()=>drop(i)},'\u00d7'))
           : React.createElement(React.Fragment,null,
@@ -5487,6 +5501,14 @@ function cirriSnapshot(g, H, PM, W, opts){
     return {id:o.id, name:o.theme||o.name||o.title||'', statement:String(o.objective||'').slice(0,300), ownerId:o.ownerId||'', timeframe:okrDueISO(o.timeframe)||o.timeframe||'', status:o.archived?'archived':(o.status||'active'), doneAt:o.doneAt||'', completionNote:String(o.completionNote||'').slice(0,400), health:o.health||'', criteria:crit.map(c=>({id:c.id,text:scText(c),metricId:c.metricId||'',start:c.start||'',now:c.now||'',target:c.target||'',covered:covered.has(c.id)})), projectIds:ps.map(p=>p.id), activeProjects:ps.filter(p=>p.queue==='active').length, doneProjects:ps.filter(p=>p.queue==='closed').length}; });
   const changes=(opts.hcHistory||[]).slice().sort((a,b)=>String(b.effectiveDate||'').localeCompare(String(a.effectiveDate||''))).slice(0,60).map(h=>({when:h.effectiveDate,type:h.type,name:h.name,role:h.role||h.title||'',org:lbl[h.leaderId]||''}));
   const departures=(opts.attrition||[]).slice().sort((a,b)=>String(b.exitDate||'').localeCompare(String(a.exitDate||''))).slice(0,40).map(a=>({when:a.exitDate,name:a.name,role:a.role||'',org:lbl[a.leaderId]||'',type:a.attritionType||'',reason:String(a.reason||'').slice(0,160)}));
+  /* PEOPLE REPORTING for the model: the same numbers as the Reporting tab, from the same functions. Only for an
+     asker who may see the roster; named departures and reasons only for one who may see the Attrition tab. */
+  const hrRows=[], hrDeps=[];
+  try{ if(PM && PM.can && PM.can('roster.view').allow && H && H.employees){ const E=H.employees, Hi=H.history||[]; const to=hrD(todayStr())||new Date(), from=hrAdd(to,-364);
+    const row=(name,orgId)=>{ const t=hrStats(E,Hi,{from,to,orgId}); return {org:name,headcount:t.hcEnd,hires:t.hires,departures:t.departures,vol:t.vol,invol:t.invol,attrition:t.attrition,retention:t.retention12,tenureAvg:t.tenureAvg,tenureMedian:t.tenureMedian,firstYear:t.firstYearShare,span:t.span,openReqs:t.openReqs,list:t.depList}; };
+    const all=row('ALL ORGS',''); hrRows.push(all); (H.effLeaders||H.leaders||[]).forEach(l=>{ const r=row(l.label,l.id); if(r.headcount||r.departures) hrRows.push(r); });
+    if(H.canViewAllComp) all.list.slice().sort((a,b)=>String(b.exitDate||'').localeCompare(String(a.exitDate||''))).slice(0,60).forEach(e=>hrDeps.push({when:e.exitDate||'',name:e.name,title:e.title||e.role||'',org:lbl[e.leaderId]||'',type:e.attritionType||'',regretted:e.regretted||'not recorded',reason:String(e.exitReason||'').slice(0,120)}));
+  } }catch(e){}
   /* metrics: latest reading and goal; judgement of on/off plan is left to the reader for now */
   W=W||{}; if(!W.periods) W.periods=(g.state&&g.state.wbr_periods)||[]; if(!W.S) { try{ W.S=wbrEffSettings(g.state&&g.state.wbrSettings); }catch(x){} }
   const metricsOut=(W&&W.metrics? W.metrics : []).map(m=>{ const es=(W.entries||[]).filter(e=>e.mid===m.id).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))); const last=es[0]||null; let goal=null; try{ goal=last? (wbrGoalInfo(m,last.pk)||{}).goal : null; }catch(e){}
@@ -5516,7 +5538,7 @@ function cirriSnapshot(g, H, PM, W, opts){
     generatedAt:new Date().toISOString(), today, weekOf:week, build:BUILD, workspace:WSR.name||'', viewer: opts.viewer||null,
     counts:{people:peopleOut.length, projects:projOut.length, activeProjects:projOut.filter(p=>p.queue==='active').length, tasks:taskOut.length, objectives:okrOut.length, metrics:metricsOut.length},
     definitions:{ queue:'QUEUED = a project that exists but is not committed to; ACTIVE = committed, with a date, being worked; CLOSED = done or abandoned. "Open" means active + queued. Only ACTIVE projects count as work in progress.', stale:'no update on open work for '+WSR.staleDays+'+ days', checkin:'the owner posts once a week on each active project: what moved, what is in the way, on track or not', onTimeRate90d:'share of tasks completed in the last 90 days that were done on or before their due date', medianReplyHours:'median hours from an @mention or a comment on their work to their first reply, last 90 days', unansweredOver48h:'requests to them with no reply after two days', datePushes:'times a due date was moved later' },
-    people:peopleOut, objectives:okrOut, peopleChanges:changes, departures, projects:projOut, tasks:taskOut, metrics:metricsOut, costByOrg:costOut, costNote: costOut.length? ('All money in '+WSR.currency+' per year. OTE = base salary + variable pay at target + target bonus; where a person shows "not split" only the OTE total was recorded. Fully loaded = OTE times the fully loaded multiplier ('+HCR.flm+', with per-country overrides) covering taxes, benefits, tools and overhead. Cutting a person saves their fully loaded cost per year, less any severance, which is not in this data.') : '', pendingApprovals:approvalsOut, openReqs:reqsOut, checkinsThisWeek:checkinsWeek, recentComments, recentActivity };
+    people:peopleOut, objectives:okrOut, peopleChanges:changes, departures, peopleReport:hrRows.map(r=>{ const c=Object.assign({},r); delete c.list; return c; }), rosterDepartures:hrDeps, projects:projOut, tasks:taskOut, metrics:metricsOut, costByOrg:costOut, costNote: costOut.length? ('All money in '+WSR.currency+' per year. OTE = base salary + variable pay at target + target bonus; where a person shows "not split" only the OTE total was recorded. Fully loaded = OTE times the fully loaded multiplier ('+HCR.flm+', with per-country overrides) covering taxes, benefits, tools and overhead. Cutting a person saves their fully loaded cost per year, less any severance, which is not in this data.') : '', pendingApprovals:approvalsOut, openReqs:reqsOut, checkinsThisWeek:checkinsWeek, recentComments, recentActivity };
 }
 /* A short text rendering for the model: compact, one line per entity, with ids for citation. */
 function snapshotText(s){
@@ -5530,6 +5552,10 @@ function snapshotText(s){
   s.objectives.forEach(o=>L.push([o.id,o.name,({active:'ACTIVE',done:'COMPLETED',abandoned:'ABANDONED',archived:'ARCHIVED'})[o.status]||String(o.status).toUpperCase(),o.doneAt?String(o.doneAt).slice(0,10):'-',name(o.ownerId),o.timeframe||'-',o.statement.replace(/\n/g,' ')||'-',o.activeProjects,o.doneProjects,o.completionNote.replace(/\n/g,' ')||'-',o.criteria.map(c=>c.text+(c.metricId?' {tracked by Business Review metric '+c.metricId+' - read its value, goal and trend in BUSINESS REVIEW METRICS}':' ['+(c.start||'?')+' -> '+(c.now||'?')+' -> '+(c.target||'?')+']')+' (covered: '+(c.covered?'yes':'no')+')').join('; ')||'-'].join(' | ')));
   if((s.peopleChanges||[]).length){ L.push('\nPEOPLE CHANGES - hires and departures on record, newest first (date | change | name | role | org)'); s.peopleChanges.forEach(h=>L.push([h.when,h.type,h.name,h.role,h.org].join(' | '))); }
   if((s.departures||[]).length){ L.push('\nDEPARTURES - the attrition log (date | name | role | org | type | reason)'); s.departures.forEach(a=>L.push([a.when,a.name,a.role,a.org,a.type,a.reason||'-'].join(' | '))); }
+  if((s.peopleReport||[]).length){ const P=(v)=>v==null?'-':(Math.round(v*10)/10)+'%', N=(v)=>v==null?'-':Math.round(v*10)/10;
+    L.push('\nPEOPLE REPORTING - worked out from start and exit dates on the roster, as of '+s.today+'. "12 mo" = the 365 days up to today. Attrition rate = departures / average headcount over the period. A rate on fewer than five departures is not a trend. (org | HEADCOUNT today | hires 12 mo | departures 12 mo | of which voluntary | of which involuntary | attrition rate 12 mo | 12-month retention | average tenure in MONTHS | median tenure in MONTHS | share of 12 mo leavers who left inside their first year | direct reports per manager | open requisitions)');
+    s.peopleReport.forEach(r=>L.push([r.org,r.headcount,r.hires,r.departures,r.vol,r.invol,P(r.attrition),P(r.retention),N(r.tenureAvg),N(r.tenureMedian),P(r.firstYear),N(r.span),r.openReqs].join(' | '))); }
+  if((s.rosterDepartures||[]).length){ L.push('\nDEPARTURES IN THE LAST 12 MONTHS, newest first (last day | name | title | org | type | regretted loss | reason)'); s.rosterDepartures.forEach(a=>L.push([a.when,a.name,a.title,a.org,a.type||'-',a.regretted,a.reason||'-'].join(' | '))); }
   L.push('\nPROJECTS (id | name | owner | QUEUE | status | health | impact | effort | due | overdue days | pushes | days since activity | stale | open/done/overdue tasks | check-in this week | last check-in | latest note | recent history | description | successful if (the result that makes this project worth having done) | contingent on (ids of projects that must succeed for this one to succeed))');
   s.projects.forEach(p=>L.push([p.id,p.name,name(p.ownerId),p.queue.toUpperCase(),p.status,p.health,p.impact||'-',p.effort||'-',p.dueDate||'-',p.overdueDays,p.datePushes,p.daysSinceActivity==null?'-':p.daysSinceActivity,p.stale?'stale':'',p.tasksOpen+'/'+p.tasksDone+'/'+p.tasksOverdue,p.checkinThisWeek?'yes':'no',p.lastCheckin? (p.lastCheckin.week+' '+p.lastCheckin.health+': '+String(p.lastCheckin.moved).slice(0,120)+(p.lastCheckin.blockers?' | blocked by: '+String(p.lastCheckin.blockers).slice(0,120):'')) : '-', p.latestNote? (String(p.latestNote.at).slice(0,10)+' '+name(p.latestNote.by)+': '+p.latestNote.text.replace(/\n/g,' ')) : '-', (p.history||[]).map(h=>h.at+' '+h.type+(h.from?' '+h.from+'->'+h.to:'')).join('; ')||'-', p.description? p.description.replace(/\n/g,' ') : '-', p.successIf? p.successIf.replace(/\n/g,' ') : '-', (p.contingentOn||[]).join(',')||'-'].join(' | ')));
   L.push('\nOPEN TASKS (id | title | description | projects | owners | status | priority | due | overdue days | blocker | next steps | latest note | contingent on (ids of tasks that must succeed for this one to succeed))');
@@ -6232,7 +6258,9 @@ function useWbr(){
 
   const entryFor=useCallback((mid,pk,wk)=> entryMap[WBR_ENTRY_ID(mid,pk,wk)]||null, [entryMap]);
   const timeline=useMemo(()=>wbrTimeline(periodKeys,periods,S),[periodKeys,periods,S]);
-  const resolver=useMemo(()=>wbrMakeResolver(metrics,entryMap,timeline),[metrics,entryMap,timeline]);
+  /* People-reporting metrics read the roster; the roster's pay never comes near this */
+  const peopleExt=useMemo(()=>{ const emps=st.hc_employees||[], hist=st.hc_history||[]; return {people:(m,pk,date)=>hrMeasureValue((m.people||{}).key, emps, hist, {asOf:date, orgId:(m.people||{}).org||''})}; },[st.hc_employees,st.hc_history]);
+  const resolver=useMemo(()=>wbrMakeResolver(metrics,entryMap,timeline,peopleExt),[metrics,entryMap,timeline,peopleExt]);
   /* the one call every view should use to read a metric at a checkpoint */
   const read=useCallback((m,pk,wk,ctx,goalOverride)=>
     wbrRead(m, resolver.entry(m,pk,wk), pk, ctx, goalOverride, resolver.plan(m.id,pk)), [resolver]);
@@ -6295,7 +6323,7 @@ function useWbr(){
     setEntriesBulk:(rows)=>{ // [{metric, pk, wk, v, raw}]
       const outs=[]; let n=0;
       rows.forEach(r=>{
-        if(wbrIsComputed(r.metric)) return;   // worked out, never typed
+        if(wbrIsDerived(r.metric)) return;   // worked out, never typed
         const id=WBR_ENTRY_ID(r.metric.id,r.pk,r.wk);
         const prev=entryMap[id]||{id, mid:r.metric.id, pk:r.pk, wk:r.wk, v:null, raw:'', note:''};
         if(String(prev.v==null?'':prev.v)===String(r.v==null?'':r.v)) return;
@@ -6919,7 +6947,7 @@ function WbrReview(){
               React.createElement('td',{className:'r'},React.createElement(WbrGoalCell,{metric:m,pk,read:r,
                 onCommit:(v)=>W.A.setGoal(m,pk,v),
                 onFlip:(mode)=>W.A.setGoalMode(m,pk,mode)})),
-              React.createElement('td',{className:'r'}, wbrIsComputed(m)
+              React.createElement('td',{className:'r'}, wbrIsDerived(m)
                 ? React.createElement('span',{className:'wbr-calc','data-tip':wbrFormulaText(m,W.metricMap)},
                     React.createElement('span',{className:'wbr-fxchip'},'fx'),
                     wbrFmtV(r.value,m.fmt))
@@ -7142,7 +7170,7 @@ function WbrTrends(){
               React.createElement('tr',{key:m.id},
                 React.createElement(WbrNameCell,null,
                   React.createElement('span',{className:'tlink',onClick:()=>nav.openMetric(m.id)},m.name),
-                  wbrIsComputed(m)? React.createElement('span',{className:'wbr-fxchip'},'fx'):null,
+                  wbrIsDerived(m)? React.createElement('span',{className:'wbr-fxchip'},'fx'):null,
                   React.createElement(WbrCad,{cad:m.cad})),
                 React.createElement('td',{className:'r muted'},wbrFmtV(wbrGoalInfo(m,mode==='weeks'?pk:cols[cols.length-1].pk,W.planAt(m,mode==='weeks'?pk:cols[cols.length-1].pk)).goal,m.fmt)),
                 cols.map(c=>{
@@ -7177,6 +7205,7 @@ function WbrTrends(){
 const WBR_KIND={
   entered:{label:'Entered each week', hint:'Somebody types the number in during the review.'},
   computed:{label:'Worked out from other metrics', hint:'The number is calculated from other metrics every time it is read, so it can never drift out of step with them.'},
+  people:{label:'From People reporting', hint:'The number is read from the roster at every checkpoint - headcount, hires, attrition, tenure. Nobody types it.'},
 };
 const WBR_FN_HELP=[
   ['A / B','a ratio'],
@@ -7299,6 +7328,10 @@ function wbrFormulaCheck(metric){
   return c;
 }
 const wbrIsComputed=(m)=> !!(m && m.kind==='computed');
+/* derived = not typed: worked out by a formula, or read from People reporting. Use this wherever the question is
+   "can somebody type this number"; use wbrIsComputed only where a formula is actually meant. */
+const wbrIsDerived=(m)=> !!(m && (m.kind==='computed' || m.kind==='people'));
+const wbrPeopleLabel=(m)=>{ const p=(m&&m.people)||{}; const M=HR_MEASURE[p.key]; return M? M.label : 'No measure picked yet'; };
 
 /* ---- one ordered run of every checkpoint the tool knows about ---- */
 function wbrTimeline(periodKeys, periods, S){
@@ -7316,7 +7349,7 @@ function wbrTimeline(periodKeys, periods, S){
 }
 
 /* ---- the resolver: turns a metric into a number at any checkpoint ---- */
-function wbrMakeResolver(metrics, entryMap, timeline){
+function wbrMakeResolver(metrics, entryMap, timeline, ext){
   const byId={}; (metrics||[]).forEach(m=>{ byId[m.id]=m; });
   const tIdx={}; timeline.forEach((t,i)=>{ tIdx[t.pk+'|'+t.wk]=i; });
   const cache={}, planCache={}, busy={}, planBusy={}, asts={};
@@ -7329,6 +7362,11 @@ function wbrMakeResolver(metrics, entryMap, timeline){
     if(key in cache) return cache[key];
     const m=byId[id];
     if(!m){ cache[key]=null; return null; }
+    if(m.kind==='people'){   /* read from the roster as of this checkpoint's date */
+      const i=tIdx[pk+'|'+wk]; const t=(i!=null)? timeline[i] : null;
+      const v=(ext && ext.people && t)? ext.people(m, pk, t.date) : null;
+      cache[key]=(v!=null && isFinite(v))? v : null; return cache[key];
+    }
     if(!wbrIsComputed(m)){
       const e=entryMap[WBR_ENTRY_ID(id,pk,wk)];
       const v=(e && e.v!=null && !isNaN(e.v))? Number(e.v) : null;
@@ -7380,7 +7418,7 @@ function wbrMakeResolver(metrics, entryMap, timeline){
   /* a synthetic entry so every view can keep calling wbrRead unchanged */
   function entry(m,pk,wk){
     const stored=entryMap[WBR_ENTRY_ID(m.id,pk,wk)]||null;
-    if(!wbrIsComputed(m)) return stored;
+    if(!wbrIsDerived(m)) return stored;
     const v=value(m.id,pk,wk);
     return {id:WBR_ENTRY_ID(m.id,pk,wk), mid:m.id, pk, wk, v, raw:'', note:stored?stored.note:''};
   }
@@ -7389,6 +7427,7 @@ function wbrMakeResolver(metrics, entryMap, timeline){
 
 /* a readable one-liner for a computed metric, with the letters spelled out */
 function wbrFormulaText(m, byId){
+  if(m && m.kind==='people') return 'From People reporting: '+wbrPeopleLabel(m);
   const f=String(m.formula||'').trim();
   if(!f) return 'No formula yet';
   const legend=(m.inputs||[]).filter(x=>x&&x.mid).map(x=>{
@@ -7558,9 +7597,9 @@ function WbrLibrary(){
                   checked:!!sel[m.id],onChange:()=>toggle(m.id)})),
               React.createElement('td',{className:'title-cell'},
                 m.name,
-                wbrIsComputed(m)? React.createElement('span',{className:'wbr-fxchip',style:{marginLeft:7}},'fx'):null,
+                wbrIsDerived(m)? React.createElement('span',{className:'wbr-fxchip',style:{marginLeft:7}},'fx'):null,
                 m.archived? React.createElement('span',{className:'pill-s s-grey',style:{marginLeft:8}},'Archived'):null,
-                wbrIsComputed(m)? React.createElement('small',null, wbrFormulaText(m)) : null),
+                wbrIsDerived(m)? React.createElement('small',null, wbrFormulaText(m)) : null),
               React.createElement('td',{className:'muted'},(W.secMap[m.sec]||{}).label||m.sec),
               React.createElement('td',null,React.createElement(WbrCad,{cad:m.cad})),
               React.createElement('td',{className:'muted tiny'},(WBR_AGG[m.agg]||WBR_AGG.snap).label),
@@ -7586,6 +7625,29 @@ function wbrBlankMetric(secId){
     hideWbr:false,hidePlan:false,goalSrc:'',srcUrl:'',srcNote:'',ownerId:'',ownerName:'',
     def:'',okrIds:[],scIds:[],archived:false};
 }
+/* Picking a People-reporting measure for a metric. Choosing one fills in the unit and good direction it is
+   normally read with; both stay editable on the metric. */
+function WbrPeoplePick({value, onChange}){
+  const store=useStore(); const st=store.state; const f=value; const p=f.people||{};
+  const leaders=useMemo(()=>{ try{ return hcLeaders({leaders:st.hc_leaders||[],employees:st.hc_employees||[]}); }catch(e){ return st.hc_leaders||[]; } },[st.hc_leaders,st.hc_employees]);
+  const set=(patch)=>{ const np=Object.assign({},p,patch); const M=HR_MEASURE[np.key]; const next=Object.assign({},f,{people:np});
+    if(M && patch.key!==undefined){ next.fmt=M.fmt; next.dir=M.dir; next.agg=M.agg||'snap'; next.cad=M.span==='month'?'MTD':'PIT'; if(!String(f.def||'').trim()||HR_MEASURES.some(x=>x.def===f.def)) next.def=M.def;
+      if(!String(f.name||'').trim()||HR_MEASURES.some(x=>f.name===x.label||f.name.indexOf(x.label+' - ')===0)) next.name=M.label+(np.org? ' - '+((leaders.find(l=>l.id===np.org)||{}).label||''):''); }
+    else if(M && patch.org!==undefined && HR_MEASURES.some(x=>f.name===x.label||String(f.name||'').indexOf(x.label+' - ')===0)) next.name=M.label+(np.org? ' - '+((leaders.find(l=>l.id===np.org)||{}).label||''):'');
+    onChange(next); };
+  const M=HR_MEASURE[p.key];
+  const now=M? hrMeasureValue(p.key, st.hc_employees||[], st.hc_history||[], {asOf:todayStr(), orgId:p.org||''}) : null;
+  return React.createElement('div',{className:'wbr-fx',style:{marginBottom:14}},
+    React.createElement('div',{className:'f-row'},
+      React.createElement(Field,{label:'Measure',hint:'What to read from the roster at each checkpoint.'},
+        React.createElement('select',{className:'inp',value:p.key||'',onChange:e=>set({key:e.target.value})},
+          React.createElement('option',{value:''},'Pick a measure\u2026'), HR_MEASURES.map(x=>React.createElement('option',{key:x.key,value:x.key},x.label)))),
+      React.createElement(Field,{label:'Org',hint:'Leave on All orgs for the whole company, or pick one org.'},
+        React.createElement('select',{className:'inp',value:p.org||'',onChange:e=>set({org:e.target.value})},
+          React.createElement('option',{value:''},'All orgs'), leaders.map(l=>React.createElement('option',{key:l.id,value:l.id},l.label))))),
+    M? React.createElement('div',{className:'tiny muted',style:{lineHeight:1.5}}, M.def, ' ', React.createElement('b',{style:{color:'var(--ink)'}}, 'Today: '+(now==null? 'no value yet' : wbrFmtV(now,f.fmt||M.fmt))))
+      : React.createElement('div',{className:'tiny muted'},'The number is worked out from start dates, exit dates and orgs on the roster. Nobody types it.'));
+}
 function WbrMetricForm({value, onChange, W}){
   const g=useGtm();
   const f=value; const up=(k,v)=>onChange(Object.assign({},f,{[k]:v}));
@@ -7600,6 +7662,7 @@ function WbrMetricForm({value, onChange, W}){
         Object.keys(WBR_KIND).map(k=>React.createElement('button',{key:k,className:(f.kind||'entered')===k?'on':'',
           onClick:()=>up('kind',k)}, WBR_KIND[k].label)))),
     (f.kind==='computed')? React.createElement(WbrFormulaBuilder,{value:f,onChange,W,self:f.id}) : null,
+    (f.kind==='people')? React.createElement(WbrPeoplePick,{value:f,onChange}) : null,
     React.createElement('div',{className:'f-row'},
       sel('sec',{label:'Department',def:'mktg',items:W.S.sections.map(s=>[s.id,s.label])}),
       sel('cad',{label:'Window',def:'MTD',items:WBR_CAD_ORDER.map(k=>[k,WBR_CAD[k].label+' - '+WBR_CAD[k].full])},
@@ -8340,7 +8403,7 @@ function WbrCharts(){
           onDragEnd:()=>{setDragId(null);setOverId(null);}},
           React.createElement(Icon,{name:'menu',size:12})),
         React.createElement('span',{className:'tlink nm',onClick:()=>nav.openMetric(m.id)},m.name),
-        wbrIsComputed(m)? React.createElement('span',{className:'wbr-fxchip'},'fx'):null,
+        wbrIsDerived(m)? React.createElement('span',{className:'wbr-fxchip'},'fx'):null,
         React.createElement(WbrCad,{cad:m.cad})),
       React.createElement('div',{className:'wbr-card-s'},
         React.createElement('span',{className:'big'}, s.last? wbrFmtV(s.last[valMode],valMode==='pct'?'pct':m.fmt) : '\u2014'),
@@ -10003,6 +10066,7 @@ function hcNav(leaders){
   return [
     {id:'hc_orgchart',label:'Org chart',ic:'users',grp:'Roster'},
     ...leaders.map(l=>({id:l.id,label:l.label,ic:'building',grp:'Orgs'})),
+    {id:'hc_people_report',label:'Reporting',ic:'bar-chart',grp:'Roster'},
     {id:'hc_attrition',label:'Attrition',ic:'user-minus',grp:'Roster'},
     {id:'hc_requests',label:'Requests',ic:'lightbulb',grp:'Roster'},
   ];
@@ -10011,6 +10075,7 @@ function hcNav(leaders){
 const NAV_HC_FIXED=[
   {id:'hc_orgchart',label:'Org chart',ic:'users'},
   {id:'hc_orgs',label:'Orgs',ic:'building'},
+  {id:'hc_people_report',label:'Reporting',ic:'bar-chart'},
   {id:'hc_attrition',label:'Attrition',ic:'user-minus'},
   {id:'hc_requests',label:'Requests',ic:'lightbulb'},
 ];
@@ -10025,6 +10090,7 @@ function hcTitle(view,leaders){
   if(view==='hc_finance') return ['Finance','Costs, CAC, payback, and gross margin across the company'];
   if(view==='hc_reporting') return ['Headcount Reporting','Tenure, level, performance, and attrition metrics'];
   if(view==='hc_orgchart') return ['Org chart','Who reports to whom, from the manager field on every record'];
+  if(view==='hc_people_report') return ['People reporting','Headcount, hiring, attrition and tenure, worked out from the roster'];
   if(view==='hc_attrition') return ['Attrition','Active flags and the departure log'];
   if(view==='hc_requests') return ['Feature Requests','Ideas and enhancement requests from the team'];
   const l=leaders.find(x=>x.id===view);
@@ -10046,6 +10112,7 @@ const HEADER_EXTRA={
  activity:'Filter by person to see everything they have done - every create, edit, completion, comment, and delete.',
  requests:'Submit an idea or upvote existing ones. Admins set status and post a response the team sees.',
  hc_requests:'Submit an idea or upvote existing ones. Admins set status and post a response the team sees.',
+ hc_people_report:'Every number is worked out from start dates, exit dates, orgs and managers on the roster. Hover any tile for its definition. Click an org row to focus on it.',
  hc_attrition:'To record a departure, open a person and hit Attrit - they land here automatically with full history.',
 };
 const TITLES_ADMIN={admin_agent:['Ask Cirri','The model, the prompts people start from, who gets a proactive brief and when, and the takes it learns from'],admin_general:['General','Everything that shapes the whole tool: the workspace, permissions, notifications, names, sign-ins, data'],admin_people:['People','Orgs, the level ladder, the manager floor, and the choices on a record'],admin_cost:['Cost','Fully loaded cost, exchange rates, buckets and channels'],admin_wbr:['Business Review','Sections and the review day'],admin_okrs:['OKRs','When work counts as stale, and how attention is ranked']};
@@ -10101,7 +10168,7 @@ const HC_DEFAULTS={
   managerMinLevel:4,                                          /* the rank at which somebody may manage people */
   leaderTag:'Department Leader',                              /* the tag that marks an org's lead on the roster */
   perfRatings:['Good','Poor','Not rated'],
-  attritionTypes:['Positive Attrition','Negative Attrition','Promotion Attrition'],
+  attritionTypes:['Voluntary','Involuntary'],
   countries:['USA','CAN','GBR','Other'],
   flm:1.26,                                                   /* fully loaded multiplier on OTE */
   flmByCountry:{},                                            /* overrides per country code */
@@ -11153,6 +11220,189 @@ function HcOrgChart(){
           reports.length? React.createElement('ul',{className:'oc'}, reports.map(node)) : React.createElement('div',{className:'tiny muted',style:{marginTop:12}},'No direct reports.'))))); 
 }
 
+/* ============================================================
+   PEOPLE REPORTING
+   Every number here is READ from the roster: start date, exit date, org, manager, departure type.
+   Nothing is typed into a report. The same functions feed the Reporting tab in People, the
+   "From People reporting" metrics in the Business Review, and the Ask Cirri snapshot, so the three
+   can never disagree.
+   A person is employed from their start date through their exit date. Headcount on a day counts
+   people who started on or before it and had not yet left, so that
+     headcount at the end = headcount at the start + hires - departures.
+   A record with no start date is counted in headcount and left out of tenure.
+   ============================================================ */
+const HR_DAY=86400000;
+const hrD=(s)=>{ const m=String(s||'').slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/); return m? new Date(+m[1],+m[2]-1,+m[3]) : null; };
+const hrISO=(d)=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const hrAdd=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+/* voluntary / involuntary from the departure type's own name, so any list of types a company sets up is read correctly */
+function hrKind(type){ const t=String(type||'').toLowerCase(); if(!t) return 'none'; if(/involuntar|terminat|laid|layoff|rif\b|reduction|dismiss|fired|performance/.test(t)) return 'invol'; if(/voluntar|resign|quit|left|negative|positive|promotion/.test(t)) return 'vol'; return 'other'; }
+function hrPool(emps, orgId){ return (emps||[]).filter(e=>e && hcStatus(e)!=='open' && (!orgId || e.leaderId===orgId)); }
+const hrExit=(e)=> hcStatus(e)==='departed'? (hrD(e.exitDate)||hrD(e.departedAt)) : null;
+function hrOn(e, d){ const s=hrD(e.startDate), x=hrExit(e); if(hcStatus(e)==='departed' && !x) return false; if(s && s>d) return false; return !x || x>d; }
+const hrMonths=(a,b)=>(b-a)/HR_DAY/30.4375;
+function hrRange(kind, today){ const t=hrD(today)||new Date(); const y=t.getFullYear(), m=t.getMonth(); const q=Math.floor(m/3)*3;
+  const R={ month:[new Date(y,m,1), t, 'This month to date'], lastMonth:[new Date(y,m-1,1), new Date(y,m,0), 'Last month'],
+    quarter:[new Date(y,q,1), t, 'This quarter to date'], lastQuarter:[new Date(y,q-3,1), new Date(y,q,0), 'Last quarter'],
+    ytd:[new Date(y,0,1), t, 'This year to date'], t12:[hrAdd(t,-364), t, 'Trailing 12 months'] }[kind] || null;
+  const r=R||[hrAdd(t,-364),t,'Trailing 12 months']; return {from:r[0], to:r[1], label:r[2]}; }
+/* everything the Reporting tab shows for one org (or all) over one period */
+function hrStats(emps, history, opt){
+  const from=opt.from, to=opt.to; const pool=hrPool(emps, opt.orgId); const ids={}; pool.forEach(e=>{ ids[e.id]=1; });
+  const before=hrAdd(from,-1);
+  const hcStart=pool.filter(e=>hrOn(e,before)).length, atEnd=pool.filter(e=>hrOn(e,to)), hcEnd=atEnd.length, avg=(hcStart+hcEnd)/2;
+  const inR=(d)=>d && d>=from && d<=to;
+  const hires=pool.filter(e=>inR(hrD(e.startDate)));
+  const deps=pool.filter(e=>inR(hrExit(e)));
+  const days=Math.round((to-from)/HR_DAY)+1;
+  const rate=(n)=> avg>0? n/avg*100 : null;
+  const vol=deps.filter(e=>hrKind(e.attritionType)==='vol').length, invol=deps.filter(e=>hrKind(e.attritionType)==='invol').length;
+  const regKnown=deps.filter(e=>e.regretted==='yes'||e.regretted==='no').length, reg=deps.filter(e=>e.regretted==='yes').length;
+  const ten=atEnd.map(e=>hrD(e.startDate)).filter(Boolean).map(s=>hrMonths(s,to)).filter(v=>v>=0).sort((a,b)=>a-b);
+  const mean=(a)=>a.length? a.reduce((x,y)=>x+y,0)/a.length : null; const med=(a)=>a.length? (a.length%2? a[(a.length-1)/2] : (a[a.length/2-1]+a[a.length/2])/2) : null;
+  const leaveTen=deps.map(e=>{ const s=hrD(e.startDate), x=hrExit(e); return (s&&x)? hrMonths(s,x) : null; }).filter(v=>v!=null);
+  const yearAgo=hrAdd(to,-365); const base=pool.filter(e=>hrOn(e,yearAgo)); const stayed=base.filter(e=>hrOn(e,to)).length;
+  const cohort=pool.filter(e=>{ const s=hrD(e.startDate); return s && s>=hrAdd(to,-455) && s<=hrAdd(to,-90); });
+  const left90=cohort.filter(e=>{ const s=hrD(e.startDate), x=hrExit(e); return x && (x-s)/HR_DAY<=90; }).length;
+  const mgr={}; atEnd.forEach(e=>{ if(e.managerId) mgr[e.managerId]=(mgr[e.managerId]||0)+1; }); const mgrN=Object.keys(mgr).length; const reports=Object.keys(mgr).reduce((a,k)=>a+mgr[k],0);
+  const promos=(history||[]).filter(h=>h && h.type==='promotion' && ids[h.empId] && inR(hrD(h.effectiveDate||h.ts))).length;
+  const bands=[['Under 6 months',0,6],['6 to 12 months',6,12],['1 to 2 years',12,24],['2 to 4 years',24,48],['4 years or more',48,1e9]].map(b=>({label:b[0], n:ten.filter(v=>v>=b[1]&&v<b[2]).length}));
+  const reasons={}; deps.forEach(e=>{ const k=String(e.exitReason||'').trim()||'Not recorded'; reasons[k]=(reasons[k]||0)+1; });
+  return { from, to, days, hcStart, hcEnd, avg, hires:hires.length, departures:deps.length, net:hires.length-deps.length,
+    attrition:rate(deps.length), attritionAnnual: avg>0? deps.length/avg*100*365/days : null, vol, invol, volRate:rate(vol), involRate:rate(invol),
+    regretted:reg, regrettedKnown:regKnown, regrettedRate: regKnown? rate(reg) : null,
+    retention12: base.length? stayed/base.length*100 : null, retentionBase:base.length,
+    tenureAvg:mean(ten), tenureMedian:med(ten), tenureCounted:ten.length, noStart:atEnd.length-ten.length, leaverTenure:mean(leaveTen),
+    firstYearShare: deps.length? leaveTen.filter(v=>v<12).length/deps.length*100 : null, firstYearN:leaveTen.filter(v=>v<12).length,
+    newHire90: cohort.length? left90/cohort.length*100 : null, newHire90Cohort:cohort.length, newHire90Left:left90,
+    span: mgrN? reports/mgrN : null, managers:mgrN, onLeave:atEnd.filter(e=>e.onLeave).length,
+    openReqs:(emps||[]).filter(e=>e&&hcStatus(e)==='open'&&(!opt.orgId||e.leaderId===opt.orgId)).length,
+    promotions:promos, promotionRate:rate(promos), bands, reasons, depList:deps, hireList:hires };
+}
+/* one point per month, oldest first: headcount at the month's end (today for the month in progress), hires and departures in it */
+function hrSeries(emps, orgId, today, n){ const t=hrD(today)||new Date(); const pool=hrPool(emps,orgId); const out=[];
+  for(let i=(n||12)-1;i>=0;i--){ const a=new Date(t.getFullYear(),t.getMonth()-i,1); let b=new Date(t.getFullYear(),t.getMonth()-i+1,0); if(b>t) b=t;
+    const inR=(d)=>d&&d>=a&&d<=b; const hc=pool.filter(e=>hrOn(e,b)).length, st=pool.filter(e=>hrOn(e,hrAdd(a,-1))).length; const dep=pool.filter(e=>inR(hrExit(e))).length;
+    out.push({pk:hrISO(a).slice(0,7), date:hrISO(b), label:a.toLocaleDateString(undefined,{month:'short'})+(a.getMonth()===0||i===(n||12)-1?' '+String(a.getFullYear()).slice(2):''), headcount:hc, hires:pool.filter(e=>inR(hrD(e.startDate))).length, departures:dep, attrition:(st+hc)>0? dep/((st+hc)/2)*100 : null}); }
+  return out; }
+/* THE MEASURES A BUSINESS REVIEW METRIC CAN TAKE FROM PEOPLE REPORTING.
+   span: 'month' = this month up to the checkpoint; 't12' = the 365 days up to it; 'now' = on the checkpoint day.
+   fmt/dir/agg/cad are what the metric starts with (they can be changed on the metric). */
+const HR_MEASURES=[
+  {key:'headcount', label:'Headcount', span:'now', fmt:'num', dir:'up', def:'People employed on the day.', f:s=>s.hcEnd},
+  {key:'hires', label:'Hires (month to date)', span:'month', fmt:'num', dir:'up', agg:'cum', def:'People whose start date falls in the month.', f:s=>s.hires},
+  {key:'departures', label:'Departures (month to date)', span:'month', fmt:'num', dir:'down', agg:'cum', def:'People whose last day falls in the month.', f:s=>s.departures},
+  {key:'net', label:'Net headcount change (month to date)', span:'month', fmt:'num', dir:'up', agg:'cum', def:'Hires minus departures in the month.', f:s=>s.net},
+  {key:'attrition_month', label:'Attrition rate (month to date)', span:'month', fmt:'pct', dir:'down', def:'Departures in the month divided by average headcount in it.', f:s=>s.attrition},
+  {key:'attrition_t12', label:'Attrition rate (trailing 12 months)', span:'t12', fmt:'pct', dir:'down', def:'Departures in the last 365 days divided by average headcount over them.', f:s=>s.attrition},
+  {key:'vol_t12', label:'Voluntary attrition (trailing 12 months)', span:'t12', fmt:'pct', dir:'down', def:'Voluntary departures in the last 365 days divided by average headcount.', f:s=>s.volRate},
+  {key:'invol_t12', label:'Involuntary attrition (trailing 12 months)', span:'t12', fmt:'pct', dir:'down', def:'Involuntary departures in the last 365 days divided by average headcount.', f:s=>s.involRate},
+  {key:'regretted_t12', label:'Regretted attrition (trailing 12 months)', span:'t12', fmt:'pct', dir:'down', def:'Departures marked as a regretted loss in the last 365 days divided by average headcount. Blank until departures carry the mark.', f:s=>s.regrettedRate},
+  {key:'retention_12', label:'12-month retention', span:'now', fmt:'pct', dir:'up', def:'Of the people employed a year earlier, the share still employed.', f:s=>s.retention12},
+  {key:'tenure_avg', label:'Average tenure (months)', span:'now', fmt:'mo', dir:'up', def:'Mean months since start date, for people employed on the day.', f:s=>s.tenureAvg},
+  {key:'tenure_median', label:'Median tenure (months)', span:'now', fmt:'mo', dir:'up', def:'Median months since start date, for people employed on the day.', f:s=>s.tenureMedian},
+  {key:'first_year_t12', label:'First-year share of departures (trailing 12 months)', span:'t12', fmt:'pct', dir:'down', def:'Of departures in the last 365 days, the share who left inside their first 12 months.', f:s=>s.firstYearShare},
+  {key:'newhire_90', label:'90-day new-hire turnover', span:'now', fmt:'pct', dir:'down', def:'Of people hired 90 to 455 days before the day, the share who left within 90 days of starting.', f:s=>s.newHire90},
+  {key:'span', label:'Span of control (reports per manager)', span:'now', fmt:'num', dir:'target', def:'People with a manager divided by the number of people who manage someone.', f:s=>s.span},
+  {key:'open_reqs', label:'Open requisitions', span:'now', fmt:'num', dir:'down', def:'Requisitions open now. Not available for past dates.', f:s=>s.openReqs, nowOnly:true},
+  {key:'promotions_t12', label:'Promotion rate (trailing 12 months)', span:'t12', fmt:'pct', dir:'up', def:'Promotions in the last 365 days divided by average headcount.', f:s=>s.promotionRate},
+];
+const HR_MEASURE={}; HR_MEASURES.forEach(m=>{ HR_MEASURE[m.key]=m; });
+/* a measure's value as of a day (a Business Review checkpoint). A day in the future has no value. */
+function hrMeasureValue(key, emps, history, opt){
+  const M=HR_MEASURE[key]; const day=hrD(opt.asOf); if(!M||!day) return null; const today=hrD(todayStr())||new Date(); if(day>today) return null;
+  if(M.nowOnly && hrISO(day).slice(0,7)!==hrISO(today).slice(0,7)) return null;
+  const from= M.span==='month'? new Date(day.getFullYear(),day.getMonth(),1) : M.span==='t12'? hrAdd(day,-364) : day;
+  const v=M.f(hrStats(emps, history, {from, to:day, orgId:opt.orgId||''})); return (v==null||!isFinite(v))? null : Math.round(v*100)/100; }
+const hrPct=(v)=> v==null? '\u2014' : (Math.round(v*10)/10)+'%';
+const hrMo=(v)=>{ if(v==null) return '\u2014'; if(v<12) return (Math.round(v*10)/10)+' mo'; return (Math.round(v/12*10)/10)+' yr'; };
+
+/* The Reporting tab in People. Every tile says how it is worked out in its tooltip; nothing here is typed. */
+function HrTile({label, val, sub, tip}){
+  return React.createElement('div',{className:'stat hr-tile'},
+    React.createElement('div',{className:'l',style:{marginTop:0,marginBottom:6,display:'flex',alignItems:'center',gap:5}}, label,
+      tip? React.createElement('span',{className:'fhint','data-tip':tip},React.createElement(Icon,{name:'info',size:12})) : null),
+    React.createElement('div',{className:'n hc-n'}, val),
+    sub? React.createElement('div',{className:'hr-sub'}, sub) : null);
+}
+function HcPeopleReport(){
+  const H=useHc(); const store=useStore(); const nav=useNav();
+  const [range,setRange]=useState('t12'); const [org,setOrg]=useState('');
+  const today=todayStr(); const leaders=H.effLeaders||H.leaders||[]; const emps=H.employees||[]; const hist=H.history||[];
+  const R=hrRange(range,today);
+  const S=useMemo(()=>hrStats(emps,hist,{from:R.from,to:R.to,orgId:org}),[emps,hist,range,org,today]);
+  const T=useMemo(()=>hrStats(emps,hist,{from:hrAdd(R.to,-364),to:R.to,orgId:org}),[emps,hist,range,org,today]);
+  const series=useMemo(()=>hrSeries(emps,org,today,12),[emps,org,today]);
+  const byOrg=useMemo(()=>leaders.map(l=>({l, p:hrStats(emps,hist,{from:R.from,to:R.to,orgId:l.id}), t:hrStats(emps,hist,{from:hrAdd(R.to,-364),to:R.to,orgId:l.id})})).filter(x=>x.p.hcEnd||x.p.hcStart||x.t.departures),[emps,hist,range,today,leaders]);
+  const seesWhy=!!H.canViewAllComp;
+  const fmtD=(d)=>fmtDate(hrISO(d));
+  const n1=(v)=> v==null? '\u2014' : (Math.round(v*10)/10);
+  const maxBand=Math.max.apply(null,S.bands.map(b=>b.n).concat([1]));
+  const reasons=Object.keys(S.reasons).map(k=>[k,S.reasons[k]]).sort((a,b)=>b[1]-a[1]);
+  const chart=(title,key,fmt,zero)=>React.createElement('div',{className:'wbr-card hr-chart'},
+    React.createElement('div',{className:'sct-crit'},title),
+    React.createElement('div',{className:'wbr-card-s'}, React.createElement('span',{className:'big'}, key==='attrition'? hrPct(series[series.length-1][key]) : series[series.length-1][key]),
+      React.createElement('span',{className:'tiny muted',style:{whiteSpace:'nowrap'}}, 'this month so far')),
+    React.createElement(WbrChart,{axis:series, fmt, baseZero:zero, height:150, vw:380, lines:[{vals:series.map(p=>p[key]), dots:true, lastTone:'none'}]}));
+  const seg=(val,set,opts)=>React.createElement('div',{className:'seg sm hr-seg'}, opts.map(o=>React.createElement('button',{key:o[0],className:val===o[0]?'on':'',onClick:()=>set(o[0])},o[1])));
+  const th=(t,r)=>React.createElement('th',{key:t,style:r?{textAlign:'right'}:null},t);
+  const td=(v,r,k)=>React.createElement('td',{key:k,className:r?'r':'',style:r?{fontVariantNumeric:'tabular-nums'}:null},v);
+  return React.createElement('div',null,
+    React.createElement('div',{className:'hr-bar'},
+      seg(range,setRange,[['month','This month'],['lastMonth','Last month'],['quarter','This quarter'],['lastQuarter','Last quarter'],['ytd','Year to date'],['t12','Trailing 12 months']]),
+      React.createElement('select',{className:'inp',style:{width:'auto',minWidth:170},value:org,onChange:e=>setOrg(e.target.value)},
+        React.createElement('option',{value:''},'All orgs'), leaders.map(l=>React.createElement('option',{key:l.id,value:l.id},l.label))),
+      React.createElement('span',{className:'tiny muted',style:{marginLeft:'auto',whiteSpace:'nowrap'}}, fmtD(R.from)+' to '+fmtD(R.to))),
+    React.createElement('div',{className:'section-title'},'Headcount and movement'),
+    React.createElement('div',{className:'hr-grid'},
+      React.createElement(HrTile,{label:'Headcount',val:S.hcEnd,sub:S.hcStart+' at the start'+(S.onLeave?' \u00b7 '+S.onLeave+' on leave':''),tip:'People employed on the last day of the period. Start + hires - departures.'}),
+      React.createElement(HrTile,{label:'Hires',val:S.hires,tip:'People whose start date falls in the period.'}),
+      React.createElement(HrTile,{label:'Departures',val:S.departures,sub:S.departures? (S.vol+' voluntary \u00b7 '+S.invol+' involuntary') : null,tip:'People whose last day falls in the period, split by the departure type on their record.'}),
+      React.createElement(HrTile,{label:'Net change',val:(S.net>0?'+':'')+S.net,tip:'Hires minus departures.'}),
+      React.createElement(HrTile,{label:'Open requisitions',val:S.openReqs,tip:'Requisitions open right now.'}),
+      React.createElement(HrTile,{label:'Promotions',val:S.promotions,sub:S.promotionRate!=null? hrPct(S.promotionRate)+' of average headcount':null,tip:'Promotions with an effective date in the period.'})),
+    React.createElement('div',{className:'section-title'},'Attrition and retention'),
+    React.createElement('div',{className:'hr-grid'},
+      React.createElement(HrTile,{label:'Attrition rate',val:hrPct(S.attrition),sub:range==='t12'? null : hrPct(S.attritionAnnual)+' annualised',tip:'Departures in the period divided by average headcount in it (start and end averaged). Annualised = that rate scaled to 365 days.'}),
+      React.createElement(HrTile,{label:'Trailing 12 months',val:hrPct(T.attrition),sub:T.departures+' of '+n1(T.avg)+' average',tip:'Departures in the 365 days up to the end of the period divided by average headcount over them. The steadiest read of attrition.'}),
+      React.createElement(HrTile,{label:'Voluntary (12 mo)',val:hrPct(T.volRate),sub:T.vol+' left by choice',tip:'Voluntary departures in the last 365 days divided by average headcount.'}),
+      React.createElement(HrTile,{label:'Involuntary (12 mo)',val:hrPct(T.involRate),sub:T.invol+' let go',tip:'Involuntary departures in the last 365 days divided by average headcount.'}),
+      React.createElement(HrTile,{label:'Regretted (12 mo)',val:T.regrettedKnown? hrPct(T.regrettedRate) : 'Not recorded',sub:T.regrettedKnown? (T.regretted+' regretted \u00b7 '+T.regrettedKnown+' of '+T.departures+' marked') : (T.departures? 'Mark departures as regretted or not to see this' : null),tip:'Departures marked as a regretted loss divided by average headcount. Only departures that carry the mark are counted.'}),
+      React.createElement(HrTile,{label:'12-month retention',val:hrPct(T.retention12),sub:T.retentionBase+' employed a year ago',tip:'Of the people employed a year before the end of the period, the share still employed.'}),
+      React.createElement(HrTile,{label:'First-year share of leavers',val:hrPct(T.firstYearShare),sub:T.firstYearN+' of '+T.departures+' in 12 months',tip:'Of departures in the last 365 days, the share who left inside their first 12 months. High means hiring or onboarding is the problem, not long-term retention.'}),
+      React.createElement(HrTile,{label:'90-day new-hire turnover',val:hrPct(T.newHire90),sub:T.newHire90Left+' of '+T.newHire90Cohort+' recent hires',tip:'Of people hired 90 to 455 days ago, the share who left within 90 days of starting.'})),
+    React.createElement('div',{className:'section-title'},'Tenure and structure'),
+    React.createElement('div',{className:'hr-grid'},
+      React.createElement(HrTile,{label:'Average tenure',val:hrMo(S.tenureAvg),sub:S.noStart? S.noStart+' with no start date left out':null,tip:'Mean time since start date, for people employed at the end of the period.'}),
+      React.createElement(HrTile,{label:'Median tenure',val:hrMo(S.tenureMedian),tip:'The middle tenure: half the team has been here longer, half shorter.'}),
+      React.createElement(HrTile,{label:'Tenure of leavers',val:hrMo(S.leaverTenure),tip:'Mean time employed, for people who left in the period.'}),
+      React.createElement(HrTile,{label:'Span of control',val:n1(S.span),sub:S.managers+' people manage someone',tip:'People with a manager divided by the number of people who manage at least one person.'})),
+    React.createElement('div',{className:'hr-two'},
+      React.createElement('div',{className:'card',style:{padding:'14px 16px'}},
+        React.createElement('div',{className:'klabel',style:{marginBottom:10}},'Tenure of the current team'),
+        S.bands.map(b=>React.createElement('div',{key:b.label,className:'hr-band'},
+          React.createElement('span',{className:'hr-band-l'},b.label),
+          React.createElement('span',{className:'hr-band-t'},React.createElement('span',{className:'hr-band-f',style:{width:(b.n/maxBand*100)+'%'}})),
+          React.createElement('span',{className:'hr-band-n'},b.n)))),
+      React.createElement('div',{className:'card',style:{padding:'14px 16px'}},
+        React.createElement('div',{className:'klabel',style:{marginBottom:10}},'Why people left ('+R.label.toLowerCase()+')'),
+        !seesWhy? React.createElement('div',{className:'tiny muted'},'Departure reasons are shown to people who can see the Attrition tab.')
+        : reasons.length? reasons.map(r=>React.createElement('div',{key:r[0],className:'hr-band'},
+            React.createElement('span',{className:'hr-band-l',style:{flex:'1 1 auto',width:'auto'},title:r[0]},r[0]), React.createElement('span',{className:'hr-band-n'},r[1])))
+        : React.createElement('div',{className:'tiny muted'},'No departures in this period.'))),
+    React.createElement('div',{className:'section-title'},'Last 12 months',
+      React.createElement('span',{className:'fhint','data-tip':'One point per month. Headcount is taken on the last day of each month, and today for the month in progress.'},React.createElement(Icon,{name:'info',size:13}))),
+    React.createElement('div',{className:'sct-grid',style:{marginBottom:18}}, chart('Headcount','headcount','num',false), chart('Hires','hires','num',true), chart('Departures','departures','num',true)),
+    React.createElement('div',{className:'section-title'},'By org ('+R.label.toLowerCase()+')'),
+    React.createElement('div',{className:'card',style:{padding:0,overflowX:'auto'}},
+      React.createElement('table',{className:'tbl',style:{minWidth:860}},
+        React.createElement('thead',null,React.createElement('tr',null,th('Org'),th('Headcount',1),th('Hires',1),th('Departures',1),th('Attrition',1),th('12 mo attrition',1),th('Voluntary / involuntary (12 mo)',1),th('Avg tenure',1),th('Span',1))),
+        React.createElement('tbody',null, byOrg.map(x=>React.createElement('tr',{key:x.l.id,style:{cursor:'pointer'},onClick:()=>setOrg(x.l.id===org?'':x.l.id)},
+          td(React.createElement('b',null,x.l.label),0,'o'), td(x.p.hcEnd,1,'h'), td(x.p.hires,1,'hi'), td(x.p.departures,1,'d'), td(hrPct(x.p.attrition),1,'a'), td(hrPct(x.t.attrition),1,'t'), td(x.t.vol+' / '+x.t.invol,1,'v'), td(hrMo(x.p.tenureAvg),1,'te'), td(n1(x.p.span),1,'s'))),
+          byOrg.length? null : React.createElement('tr',null,React.createElement('td',{colSpan:9,className:'muted',style:{padding:18}},'No people on the roster yet.'))))),
+    React.createElement('div',{className:'tiny muted',style:{marginTop:10}},'Any of these can be reviewed weekly: in the Business Review, add a metric and choose "From People reporting".'));
+}
+
 function HcAttrition(){
   const H = useHc();
   const hcx = useHcCtx();
@@ -11170,9 +11420,10 @@ function HcAttrition(){
     .sort((a,b)=>String(b.exitDate||'').localeCompare(String(a.exitDate||'')));
   const flagged = H.employees.filter(e=>e.status!=='departed'&&e.attrition).filter(e=>match(e.name,e.attrition,e.leaderId));
   const legacy = (H.attritionLog||[]).filter(e=>match(e.name,e.attritionType,e.leaderId));
-  const dNeg=H.employees.filter(e=>e.status==='departed'&&e.attritionType==='Negative Attrition').length;
-  const dPos=H.employees.filter(e=>e.status==='departed'&&e.attritionType==='Positive Attrition').length;
-  const dPro=H.employees.filter(e=>e.status==='departed'&&e.attritionType==='Promotion Attrition').length;
+  const gone=H.employees.filter(e=>e.status==='departed');
+  const dNeg=gone.filter(e=>hrKind(e.attritionType)==='vol').length;
+  const dPos=gone.filter(e=>hrKind(e.attritionType)==='invol').length;
+  const dPro=gone.filter(e=>e.regretted==='yes').length;
   const th=(t,r)=>React.createElement('th',{className:r?'r':''},t);
   const typeCls=(a)=>a==='Negative Attrition'?'s-red':a==='Positive Attrition'?'s-green':'s-blue';
   const lname=(id)=>{const l=leaders.find(x=>x.id===id);return l?l.label:(id||'');};
@@ -11191,9 +11442,9 @@ function HcAttrition(){
 
   return React.createElement('div',null,
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:10,marginBottom:16}},
-      React.createElement(HcStat,{label:'Departed - Negative',val:dNeg,dot:dNeg>0?'var(--red)':null}),
-      React.createElement(HcStat,{label:'Departed - Positive',val:dPos,dot:dPos>0?'var(--green)':null}),
-      React.createElement(HcStat,{label:'Departed - Promotion',val:dPro}),
+      React.createElement(HcStat,{label:'Departed - voluntary',val:dNeg}),
+      React.createElement(HcStat,{label:'Departed - involuntary',val:dPos}),
+      React.createElement(HcStat,{label:'Regretted losses',val:dPro,sub:gone.filter(e=>e.regretted==='yes'||e.regretted==='no').length+' of '+gone.length+' marked'}),
       React.createElement(HcStat,{label:'At-risk flags (active)',val:flagged.length,dot:flagged.length>0?'var(--amber)':null})),
     React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}},
       React.createElement('input',{className:'inp',style:{maxWidth:220},placeholder:'Search name\u2026',value:search,onChange:e=>setSearch(e.target.value)}),
@@ -11462,10 +11713,11 @@ function HcAttritModal({emp,onClose}){
   const H=useHc();
   const leaders=H.effLeaders;
   const orgLabel=(leaders.find(l=>l.id===emp.leaderId)||{}).label||emp.leaderId;
-  const [type,setType]=useState(emp.attrition||'Negative Attrition');
+  const [type,setType]=useState(HC_ATTR_TYPES.indexOf(emp.attrition)>0? emp.attrition : (HC_ATTR_TYPES.filter(Boolean)[0]||''));
+  const [regret,setRegret]=useState('');
   const [date,setDate]=useState(new Date().toISOString().slice(0,10));
   const [reason,setReason]=useState('');
-  const submit=()=>{ H.attritEmp(emp,{attritionType:type,exitDate:date,reason}); onClose(); };
+  const submit=()=>{ H.attritEmp(Object.assign({},emp,{regretted:regret}),{attritionType:type,exitDate:date,reason}); onClose(); };
   return React.createElement(HcModalShell,{title:'Attrit: '+emp.name,onClose,
     footer:[React.createElement('button',{key:1,className:'btn',onClick:onClose},'Cancel'),React.createElement('button',{key:2,className:'btn danger',onClick:submit},'Confirm departure')]},
     React.createElement('div',{className:'note',style:{marginTop:0,marginBottom:14,fontSize:12.5}},'This marks '+emp.name+' as departed. They drop out of active headcount and cost immediately, move to the Attrition tab, and this is recorded in their history. No separate log step.'),
@@ -11473,6 +11725,8 @@ function HcAttritModal({emp,onClose}){
     React.createElement('div',{className:'f-row'},
       React.createElement('div',{className:'field'},React.createElement('label',null,'Attrition type'),React.createElement('select',{className:'inp',value:type,onChange:e=>setType(e.target.value)},HC_ATTR_TYPES.filter(Boolean).map(a=>React.createElement('option',{key:a,value:a},a)))),
       React.createElement('div',{className:'field'},React.createElement('label',null,'Exit date'),React.createElement('input',{className:'inp',type:'date',value:date,onChange:e=>setDate(e.target.value)}))),
+    React.createElement('div',{className:'field'},React.createElement('label',null,'Regretted loss ',React.createElement('span',{className:'fhint','data-tip':'Would we have kept this person if we could? Feeds regretted attrition in People reporting.'},React.createElement(Icon,{name:'info',size:12}))),
+      React.createElement('div',{className:'seg sm',style:{width:'fit-content'}}, [['yes','Yes'],['no','No'],['','Not recorded']].map(o=>React.createElement('button',{key:o[0],type:'button',className:regret===o[0]?'on':'',onClick:()=>setRegret(o[0])},o[1])))),
     React.createElement('div',{className:'field'},React.createElement('label',null,'Reason / notes'),React.createElement('textarea',{className:'inp',rows:3,autoFocus:true,placeholder:'Why are they leaving? What did we learn?',value:reason,onChange:e=>setReason(e.target.value)})));
 }
 
@@ -11865,7 +12119,7 @@ function HcModalHost({modal,onClose,onOpen}){
 const CU_FMT={num:'num',number:'num',count:'num',cur:'cur',currency:'cur',money:'cur',pct:'pct',percent:'pct',days:'days',day:'days',hrs:'hrs',hours:'hrs',sec:'sec',seconds:'sec',mo:'mo',months:'mo',score:'score',ratio:'ratio'};
 const CU_DIR={up:'up',higher:'up',down:'down',lower:'down',target:'target'};
 const CU_AGG={cum:'cum',cumulative:'cum',sum:'cum',snap:'snap',rate:'snap',average:'snap',snapshot:'snap',level:'snap'};
-const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','base','variable','bonus','ote','onLeave','status','exitDate','attritionType','exitReason','slackId','teamTags','cost'];
+const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','base','variable','bonus','ote','onLeave','status','exitDate','attritionType','exitReason','regretted','slackId','teamTags','cost'];
 function cuLc(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function cuHas(o,k){ return o && Object.prototype.hasOwnProperty.call(o,k) && o[k]!==undefined; }
 function cuSame(a,b){ return JSON.stringify(a==null?'':a)===JSON.stringify(b==null?'':b); }
@@ -11946,6 +12200,7 @@ function cuPlan(file, ctx){
     if(cuHas(row,'manager')){ if(!String(row.manager||'').trim()){ patch.managerId=''; patch.manager=''; }
       else { const p=personRef(row.manager); if(p&&p.id&&p.id!==m.id){ patch.managerId=p.id; patch.manager=p.name; } else R.warnings.push(w+': manager "'+row.manager+'" is not on the roster or in this file; manager left as it was.'); } }
     if(cuHas(row,'onLeave')) patch.onLeave=!!row.onLeave;
+    if(cuHas(row,'regretted')) patch.regretted=(row.regretted===true||/^(yes|true|y)$/i.test(String(row.regretted)))? 'yes' : (row.regretted===false||/^(no|false|n)$/i.test(String(row.regretted)))? 'no' : '';
     if(cuHas(row,'teamTags')) patch.teamTags=Array.isArray(row.teamTags)? row.teamTags.map(String).slice(0,3) : [];
     if(cuHas(row,'ote')){ if(!ctx.canComp) R.warnings.push(w+': pay skipped - your permission set does not include this person\u2019s pay.'); else { const v=cuNum(row.ote); if(v!=null) patch.ote=v; else if(row.ote!==null) R.warnings.push(w+': ote "'+row.ote+'" is not a number; pay left as it was.'); } }
     if(['base','variable','bonus'].some(k=>cuHas(row,k))){
@@ -12055,7 +12310,7 @@ function cuPlan(file, ctx){
     const m=metricRef(r&&r.metric, r&&r.section);
     if(m==='ambiguous'){ R.errors.push(w+': more than one metric is called "'+r.metric+'". Give its section or its id.'); return; }
     if(!m){ R.readings.skipped.push({row:r, why:'no metric called "'+(r&&r.metric)+'"'}); return; }
-    if(wbrIsComputed(m)){ R.readings.skipped.push({row:r, why:m.name+' is worked out by a formula, never typed'}); return; }
+    if(wbrIsDerived(m)){ R.readings.skipped.push({row:r, why:m.name+' is worked out by a formula, never typed'}); return; }
     const date=cuIsoDate(r.date); const pk=(r.month&&/^\d{4}-\d{2}$/.test(String(r.month)))? String(r.month) : (date? date.slice(0,7) : '');
     if(!pk){ R.errors.push(w+' ('+m.name+'): needs a month (YYYY-MM) or a date.'); return; }
     const wk=weekOf(pk, r.week||date);
@@ -12126,7 +12381,7 @@ function cuTemplate(st, emps, leaders, S){
 
 /* The weekly update card on Settings > General > Data, and its preview. */
 function cuFmtPay(v){ return v==null||v===''? 'none' : fmtMoney(Number(v)); }
-const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'OTE',base:'base',variable:'variable',bonus:'bonus',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',slackId:'Slack id',teamTags:'tags',
+const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'OTE',base:'base',variable:'variable',bonus:'bonus',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',regretted:'regretted loss',slackId:'Slack id',teamTags:'tags',
   c1:'cost line 1',w1:'cost line 1 %',t1:'cost line 1 tag',ch1:'cost line 1 channel',c2:'cost line 2',w2:'cost line 2 %',t2:'cost line 2 tag',ch2:'cost line 2 channel',c3:'cost line 3',w3:'cost line 3 %',t3:'cost line 3 tag',ch3:'cost line 3 channel',
   sec:'section',def:'definition',fmt:'unit',cad:'window',agg:'aggregation',dir:'direction',band:'tolerance',goalDefault:'standing goal',ownerId:'owner',hideWbr:'hidden from review',hidePlan:'hidden from plan'};
 function CuList({items, render, cap}){
@@ -12985,7 +13240,7 @@ const NAME_DEFAULTS=[
   {id:'app:okr',desc:'The section for objectives, projects, tasks and the conversations on them.',label:'OKRs',grp:'Sections'},{id:'app:wbr',desc:'The section for weekly metrics, goals, pacing and the plan.',label:'Business Review',grp:'Sections'},{id:'app:hc',desc:'The section for the org chart, rosters, attrition and open reqs.',label:'People',grp:'Sections'},{id:'app:cost',desc:'The section for spend, CAC, payback and headcount cost. Usually for leaders only.',label:'Cost',grp:'Sections'},{id:'app:admin',desc:'The section for settings: workspace, permissions, notifications, and each section\u2019s own settings.',label:'Settings',grp:'Sections'},
   {id:'scoreboard',desc:'One page per person: what they own, what is late, how they are doing.',label:'Scoreboard',grp:'OKRs'},{id:'okrs',desc:'The objectives, each with its success criteria and the projects driving them.',label:'Objectives',grp:'OKRs'},{id:'projects',desc:'Every project, queued or active, with its tasks.',label:'Projects',grp:'OKRs'},{id:'mywork',desc:'Where each person starts: what they own, what needs attention, what is coming up.',label:'My Work',grp:'OKRs'},{id:'inbox',desc:'Mentions and replies addressed to you.',label:'Inbox',grp:'OKRs'},{id:'approvals',desc:'Requests waiting for a decision, and the ones you have made.',label:'Approvals',grp:'OKRs'},{id:'audit',desc:'Lenses on what is late, stale, blocked, unchecked or uncovered.',label:'Audit',grp:'OKRs'},{id:'activity',desc:'The log of who changed what, and when.',label:'Activity',grp:'OKRs'},{id:'team',desc:'A lookup over the roster: your team, your reports, your org, everyone.',label:'Team',grp:'OKRs'},{id:'requests',desc:'Ideas and feature requests for the tool itself.',label:'Requests',grp:'OKRs'},
   {id:'wbr_review',desc:'The weekly review: readings against goals, week by week.',label:'Review',grp:'Business Review'},{id:'wbr_scorecard',desc:'One screen of every metric and its status.',label:'Scorecard',grp:'Business Review'},{id:'wbr_trends',desc:'Charts over time for the metrics that matter.',label:'Dashboard',grp:'Business Review'},{id:'wbr_plan',desc:'The annual plan the goals are pacing against.',label:'Plan',grp:'Business Review'},{id:'wbr_metrics',desc:'The list of metrics, their owners and cadence.',label:'Metrics',grp:'Business Review'},
-  {id:'hc_orgchart',desc:'Who reports to whom, centred on you.',label:'Org chart',grp:'People'},{id:'hc_attrition',desc:'Attrition flags and the departure log.',label:'Attrition',grp:'People'},{id:'hc_requests',desc:'Open reqs, and who is hiring for them.',label:'Requests',grp:'People'},
+  {id:'hc_orgchart',desc:'Who reports to whom, centred on you.',label:'Org chart',grp:'People'},{id:'hc_people_report',desc:'Headcount, hiring, attrition and tenure.',label:'Reporting',grp:'People'},{id:'hc_attrition',desc:'Attrition flags and the departure log.',label:'Attrition',grp:'People'},{id:'hc_requests',desc:'Open reqs, and who is hiring for them.',label:'Requests',grp:'People'},
   {id:'hc_finance',desc:'Costs, CAC, payback and gross margin.',label:'Finance',grp:'Cost'},{id:'hc_split',desc:'How each person\u2019s cost is allocated across buckets.',label:'Cost split',grp:'Cost'},{id:'hc_reporting',desc:'Headcount and cost by org, level, country and tenure.',label:'Headcount',grp:'Cost'},
 ];
 function AdminNamesCard(){
@@ -13050,7 +13305,7 @@ function TabOrderModal({app, base, nameOf, isAdmin, onClose}){
    sign in. The app itself is shown when any of its tabs is. */
 const NAV_PERM={ scoreboard:'scoreboard.view', activity:'activity.view',
   wbr_review:'wbr.view', wbr_scorecard:'wbr.view', wbr_trends:'wbr.view', wbr_metrics:'wbr.view', wbr_plan:'plan.view',
-  hc_finance:'finance.view', hc_split:'finance.view', hc_reporting:'finance.view', hc_attrition:'comp.view', hc_orgchart:'roster.view', hc_requests:'roster.view', hc_settings:'hc.settings' };
+  hc_finance:'finance.view', hc_split:'finance.view', hc_reporting:'finance.view', hc_attrition:'comp.view', hc_people_report:'roster.view', hc_orgchart:'roster.view', hc_requests:'roster.view', hc_settings:'hc.settings' };
 function App(){
   const g = useGtm();
   const hcData = useHc();
@@ -13300,9 +13555,10 @@ function App(){
                 view==='hc_split'&&React.createElement(HcCostSplitView),
                 view==='hc_reporting'&&React.createElement(HeadcountReporting),
                 view==='hc_orgchart'&&React.createElement(HcOrgChart),
+                view==='hc_people_report'&&React.createElement(HcPeopleReport),
                 view==='hc_attrition'&&React.createElement(HcAttrition),
                 view==='hc_requests'&&React.createElement(FeatureRequestsView,{area:'headcount'}),
-                (!['hc_finance','hc_split','hc_reporting','hc_attrition','hc_requests','hc_orgchart'].includes(view))&&React.createElement(HcLeaderRoster,{leaderId:view})))),
+                (!['hc_finance','hc_split','hc_reporting','hc_people_report','hc_attrition','hc_requests','hc_orgchart'].includes(view))&&React.createElement(HcLeaderRoster,{leaderId:view})))),
       React.createElement(DrawerHost,{drawer}),
       React.createElement(HcModalHost,{modal:hcModal,onClose:()=>setHcModal(null),onOpen:setHcModal}),
       agentOpen&&React.createElement(AgentPanel,{about:agentAbout,onClose:()=>{ setAgentOpen(false); setAgentAbout(null); }}),
