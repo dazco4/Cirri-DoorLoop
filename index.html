@@ -1199,7 +1199,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-23-1330';
+const BUILD='2026-11-23-1343';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -3317,7 +3317,7 @@ function OkrTrends({okr}){
           lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]})
         : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.'),
       (function(){ const all=scProjectMarks(okr,c,projects); if(!all.length) return null; const lo=tr.pts.length? String(tr.pts[0].date):'', hi=tr.pts.length? String(tr.pts[tr.pts.length-1].date):'';
-        const on=all.filter(k=>lo && k.date>=lo && k.date<=hi), off=all.length-on.length;
+        const on=lo? all.filter(k=>k.date>=lo && k.date<=hi) : all, off=all.length-on.length;   /* no chart yet: list every project date, there is nothing for one to be outside of */
         return React.createElement('div',{className:'sct-marks'},
           on.map((k,i)=>React.createElement('span',{key:i,className:'sct-mark',title:k.label.replace('\n',' \u00b7 '),onClick:()=>nav.openProject(k.pid)},
             React.createElement('span',{className:'sct-mk '+k.kind}), React.createElement('span',{className:'sct-mark-n'},k.name), React.createElement('span',{className:'sct-mark-d'},(k.kind==='start'?'started ':k.kind==='end'?'finished ':'abandoned ')+fmtDateShort(k.date)))),
