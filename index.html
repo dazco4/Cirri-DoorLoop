@@ -1119,6 +1119,21 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .hc-prof-b{flex:1 1 auto;min-width:0}
 .hc-prof-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .hc-intro{margin:0 0 14px;font-size:13.5px;line-height:1.55;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.wbr-mark line{stroke-width:1;stroke-dasharray:2 3}
+.wbr-mark.start line{stroke:var(--gold-deep)}
+.wbr-mark.start circle{fill:var(--gold);stroke:var(--gold-deep);stroke-width:1}
+.wbr-mark.end line{stroke:var(--deep)}
+.wbr-mark.end rect{fill:var(--deep);stroke:#fff;stroke-width:1.2}
+.wbr-mark.stopped line{stroke:var(--muted-2)}
+.wbr-mark.stopped rect{fill:#fff;stroke:var(--muted-2);stroke-width:1.4}
+.sct-marks{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.sct-mark{display:flex;align-items:center;gap:7px;min-width:0;font-size:12px;color:var(--ink);cursor:pointer}
+.sct-mark:hover .sct-mark-n{text-decoration:underline}
+.sct-mk{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:inset 0 0 0 1px var(--gold-deep)}
+.sct-mk.end{border-radius:2px;background:var(--deep)}
+.sct-mk.stopped{border-radius:2px;background:#fff;box-shadow:inset 0 0 0 1.4px var(--muted-2)}
+.sct-mark-n{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.sct-mark-d{flex:0 0 auto;color:var(--ink-2);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1184,7 +1199,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-23-0145';
+const BUILD='2026-11-23-1330';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -3274,13 +3289,20 @@ function ScLine({c, ps}){
       !uncovered&&driving.length>0&&React.createElement('span',{className:'pill-s s-grey',style:{fontSize:10,padding:'1px 7px',flexShrink:0},title:driving.length+' linked project'+(driving.length===1?'':'s')+' drive this'},driving.length+' proj')));
 }
 /* How each tracked criterion is trending: one chart per criterion, its own scale, goal dashed behind it. */
+/* The projects whose start and finish are marked on a criterion's chart: the ones aligned to that criterion,
+   plus projects under the objective that were not aligned to any criterion in particular. */
+function scProjectMarks(okr, c, projects){
+  const out=[]; (projects||[]).forEach(p=>{ if(!p || (p.okrIds||[]).indexOf(okr.id)<0) return; const sc=p.scIds||[]; if(sc.length && sc.indexOf(c.id)<0) return;
+    if(p.startedAt) out.push({date:p.startedAt, kind:'start', pid:p.id, name:p.name, label:'Started: '+p.name+'\n'+fmtDate(p.startedAt)});
+    if(isClosedStatus(p.status) && p.doneAt){ const d=String(p.doneAt).slice(0,10); const n=projDaysRunning(p); out.push({date:d, kind:p.status==='abandoned'?'stopped':'end', pid:p.id, name:p.name, label:(p.status==='abandoned'?'Abandoned: ':'Finished: ')+p.name+'\n'+fmtDate(d)+(n!=null?' \u00b7 took '+n+' day'+(n===1?'':'s'):'')}); } });
+  return out.sort((a,b)=>String(a.date).localeCompare(String(b.date))); }
 function OkrTrends({okr}){
-  const W=useWbr(); const nav=useNav();
+  const W=useWbr(); const nav=useNav(); const {projects}=useGtm();
   const rows=useMemo(()=>(okr.successCriteria||[]).map(c=>{ const m=scMetricOf(c,W); return m? {c,m,tr:scTrend(W,m,26)} : null; }).filter(Boolean),[okr.successCriteria,W.metricMap,W.timeline,W.resolver,W.periods]);
   if(!rows.length) return null;
   return React.createElement('div',{style:{marginBottom:18}},
     React.createElement('div',{className:'section-title'},'Trend',
-      React.createElement('span',{className:'fhint','data-tip':'Each tracked success criterion over time, read from the Business Review. A month-to-date total is drawn at its pace. Dashed line is the goal.'},React.createElement(Icon,{name:'info',size:13}))),
+      React.createElement('span',{className:'fhint','data-tip':'Each tracked success criterion over time, read from the Business Review. A month-to-date total is drawn at its pace. Dashed line is the target. A gold dot marks the day a project serving this criterion started; a navy square the day it finished.'},React.createElement(Icon,{name:'info',size:13}))),
     React.createElement('div',{className:'sct-grid'}, rows.map(({c,m,tr})=>React.createElement('div',{key:c.id,className:'wbr-card sct-card'},
       React.createElement('div',{className:'sct-crit',title:scText(c)}, scParts(c).name, scParts(c).sec? React.createElement('span',{className:'sc-sec'},scParts(c).sec) : null),
       React.createElement('div',{className:'sct-sub'},
@@ -3291,9 +3313,15 @@ function OkrTrends({okr}){
         tr.last? React.createElement('span',{className:'tiny muted',style:{whiteSpace:'nowrap'}},'as of '+fmtDateShort(tr.last.date)) : null,
         scHasGoal(c)? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}}, tr.last? React.createElement('span',{className:'stg '+(scMet(c,tr.last.pace)?'st-done':'st-not_started'),style:{marginRight:6}}) : null, scGoalText(c))
         : (tr.last&&tr.last.pct!=null? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}},React.createElement(WbrDot,{tone:tr.last.tone}), wbrTrim(tr.last.pct,1)+'% to plan'):null)),
-      tr.pts.length? React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380,
+      tr.pts.length? React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380, marks:scProjectMarks(okr,c,projects),
           lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]})
-        : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.')))));
+        : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.'),
+      (function(){ const all=scProjectMarks(okr,c,projects); if(!all.length) return null; const lo=tr.pts.length? String(tr.pts[0].date):'', hi=tr.pts.length? String(tr.pts[tr.pts.length-1].date):'';
+        const on=all.filter(k=>lo && k.date>=lo && k.date<=hi), off=all.length-on.length;
+        return React.createElement('div',{className:'sct-marks'},
+          on.map((k,i)=>React.createElement('span',{key:i,className:'sct-mark',title:k.label.replace('\n',' \u00b7 '),onClick:()=>nav.openProject(k.pid)},
+            React.createElement('span',{className:'sct-mk '+k.kind}), React.createElement('span',{className:'sct-mark-n'},k.name), React.createElement('span',{className:'sct-mark-d'},(k.kind==='start'?'started ':k.kind==='end'?'finished ':'abandoned ')+fmtDateShort(k.date)))),
+          off? React.createElement('span',{className:'tiny muted'}, off+' project date'+(off===1?'':'s')+' outside this chart') : null); })()))));
 }
 /* The criteria editor. A criterion is picked from the Business Review, or made there through the review's
    own New metric form (entered or worked out by a formula) - one creator, the same in both places.
@@ -6315,7 +6343,7 @@ function useWbr(){
   const entryFor=useCallback((mid,pk,wk)=> entryMap[WBR_ENTRY_ID(mid,pk,wk)]||null, [entryMap]);
   const timeline=useMemo(()=>wbrTimeline(periodKeys,periods,S),[periodKeys,periods,S]);
   /* People-reporting metrics read the roster; the roster's pay never comes near this */
-  const peopleExt=useMemo(()=>{ const emps=st.hc_employees||[], hist=st.hc_history||[]; return {people:(m,pk,date)=>hrMeasureValue((m.people||{}).key, emps, hist, {asOf:date, orgId:(m.people||{}).org||''})}; },[st.hc_employees,st.hc_history]);
+  const peopleExt=useMemo(()=>{ const emps=st.hc_employees||[], hist=st.hc_history||[]; return {people:(m,pk,date)=>hrMeasureValue((m.people||{}).key, emps, hist, {asOf:date, orgId:(m.people||{}).org||'', filter:m.people})}; },[st.hc_employees,st.hc_history]);
   const resolver=useMemo(()=>wbrMakeResolver(metrics,entryMap,timeline,peopleExt),[metrics,entryMap,timeline,peopleExt]);
   /* the one call every view should use to read a metric at a checkpoint */
   const read=useCallback((m,pk,wk,ctx,goalOverride)=>
@@ -7387,7 +7415,7 @@ const wbrIsComputed=(m)=> !!(m && m.kind==='computed');
 /* derived = not typed: worked out by a formula, or read from People reporting. Use this wherever the question is
    "can somebody type this number"; use wbrIsComputed only where a formula is actually meant. */
 const wbrIsDerived=(m)=> !!(m && (m.kind==='computed' || m.kind==='people'));
-const wbrPeopleLabel=(m)=>{ const p=(m&&m.people)||{}; const M=HR_MEASURE[p.key]; return M? M.label : 'No measure picked yet'; };
+const wbrPeopleLabel=(m)=>{ const p=(m&&m.people)||{}; const M=HR_MEASURE[p.key]; if(M&&p.key==='count') return 'people where '+hrFilterText(p); return M? M.label : 'No measure picked yet'; };
 
 /* ---- one ordered run of every checkpoint the tool knows about ---- */
 function wbrTimeline(periodKeys, periods, S){
@@ -7690,9 +7718,14 @@ function WbrPeoplePick({value, onChange}){
     if(M && patch.key!==undefined){ next.fmt=M.fmt; next.dir=M.dir; next.agg=M.agg||'snap'; next.cad=M.span==='month'?'MTD':'PIT'; if(!String(f.def||'').trim()||HR_MEASURES.some(x=>x.def===f.def)) next.def=M.def;
       if(!String(f.name||'').trim()||HR_MEASURES.some(x=>f.name===x.label||f.name.indexOf(x.label+' - ')===0)) next.name=M.label+(np.org? ' - '+((leaders.find(l=>l.id===np.org)||{}).label||''):''); }
     else if(M && patch.org!==undefined && HR_MEASURES.some(x=>f.name===x.label||String(f.name||'').indexOf(x.label+' - ')===0)) next.name=M.label+(np.org? ' - '+((leaders.find(l=>l.id===np.org)||{}).label||''):'');
+    /* a filtered head count is named after its filter until somebody gives it a name of their own */
+    if(np.key==='count' && (!String(f.name||'').trim() || f.name===autoName(p) || f.name===HR_MEASURE.count.label)) next.name=autoName(np);
     onChange(next); };
   const M=HR_MEASURE[p.key];
-  const now=M? hrMeasureValue(p.key, st.hc_employees||[], st.hc_history||[], {asOf:todayStr(), orgId:p.org||''}) : null;
+  const now=M? hrMeasureValue(p.key, st.hc_employees||[], st.hc_history||[], {asOf:todayStr(), orgId:p.org||'', filter:p}) : null;
+  const isCount=p.key==='count';
+  const who=isCount? hrMatch(st.hc_employees||[], p, hrD(todayStr())||new Date(), st.hc_history||[]).map(e=>e.name).filter(Boolean).sort() : [];
+  const autoName=(x)=>{ const t=String(x.title||'').trim()||'People'; const n=String(x.tenMonths==null?'':x.tenMonths).trim(); const wh=x.tenFrom==='start'?' at the company':' in role'; return t+((x.tenOp&&n!=='')? (x.tenOp==='gt'? ' - more than '+n+' months'+wh : ' - '+n+' months or less'+wh) : ''); };
   return React.createElement('div',{className:'wbr-fx',style:{marginBottom:14}},
     React.createElement('div',{className:'f-row'},
       React.createElement(Field,{label:'Measure',hint:'What to read from the roster at each checkpoint.'},
@@ -7701,7 +7734,19 @@ function WbrPeoplePick({value, onChange}){
       React.createElement(Field,{label:'Org',hint:'Leave on All orgs for the whole company, or pick one org.'},
         React.createElement('select',{className:'inp',value:p.org||'',onChange:e=>set({org:e.target.value})},
           React.createElement('option',{value:''},'All orgs'), leaders.map(l=>React.createElement('option',{key:l.id,value:l.id},l.label))))),
-    M? React.createElement('div',{className:'tiny muted',style:{lineHeight:1.5}}, M.def, ' ', React.createElement('b',{style:{color:'var(--ink)'}}, 'Today: '+(now==null? 'no value yet' : wbrFmtV(now,f.fmt||M.fmt))))
+    isCount? React.createElement('div',{className:'f-row'},
+      React.createElement(Field,{label:'Title contains',hint:'Any part of the job title. Separate alternatives with commas: Account Executive, AE. Leave empty for everyone.'},
+        React.createElement('input',{className:'inp',value:p.title||'',placeholder:'Account Executive',onChange:e=>set({title:e.target.value})})),
+      React.createElement(Field,{label:'Tenure',hint:'In calendar months. Ramped is usually "more than 3 in the role"; unramped is "3 or less". In the role counts from their last promotion or role change (or their start date if there was none); at the company counts from their start date.'},
+        React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+          React.createElement('select',{className:'inp',style:{flex:'1 1 110px',minWidth:0},value:p.tenOp||'',onChange:e=>set({tenOp:e.target.value, tenMonths:(e.target.value&&(p.tenMonths==null||p.tenMonths===''))? 3 : p.tenMonths})},
+            React.createElement('option',{value:''},'Any tenure'), React.createElement('option',{value:'gt'},'More than'), React.createElement('option',{value:'lte'},'At most')),
+          p.tenOp? React.createElement('input',{className:'inp',type:'number',min:0,step:1,style:{width:74,flex:'0 0 auto'},value:p.tenMonths==null?'':p.tenMonths,onChange:e=>set({tenMonths:e.target.value===''?'':Math.max(0,parseInt(e.target.value,10)||0)})}) : null,
+          p.tenOp? React.createElement('select',{className:'inp',style:{flex:'1 1 100%',minWidth:0},value:p.tenFrom==='start'?'start':'role',onChange:e=>set({tenFrom:e.target.value})},
+            React.createElement('option',{value:'role'},'months in the role'), React.createElement('option',{value:'start'},'months at the company')) : null))) : null,
+    isCount? React.createElement('div',{className:'tiny muted',style:{lineHeight:1.5}}, 'Counted from the roster at every checkpoint, as of that date. ',
+        React.createElement('b',{style:{color:'var(--ink)'}}, 'Today: '+who.length+(who.length===1?' person':' people')), who.length? ' \u2014 '+who.slice(0,8).join(', ')+(who.length>8?' and '+(who.length-8)+' more':'') : '')
+    : M? React.createElement('div',{className:'tiny muted',style:{lineHeight:1.5}}, M.def, ' ', React.createElement('b',{style:{color:'var(--ink)'}}, 'Today: '+(now==null? 'no value yet' : wbrFmtV(now,f.fmt||M.fmt))))
       : React.createElement('div',{className:'tiny muted'},'The number is worked out from start dates, exit dates and orgs on the roster. Nobody types it.'));
 }
 function WbrMetricForm({value, onChange, W}){
@@ -8323,7 +8368,7 @@ function wbrPath(vals, X, Y){
 /* One chart, one shared vertical scale, however many lines. The viewBox width is
    passed in rather than fixed so text renders at roughly the same size whether it
    is a small card or the full width chart. */
-function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis}){
+function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks}){
   const H=height||190, VW=vw||460, PL=showAxis===false?6:44, PR=10, PT=12, PB=24;
   const vals=[];
   (lines||[]).forEach(l=>(l.vals||[]).forEach(v=>{ if(v!=null) vals.push(v); }));
@@ -8334,6 +8379,10 @@ function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis}){
   const pad=(hi-lo)*0.12; hi+=pad; if(!baseZero||lo<0) lo-=pad;
   const X=(i)=> PL + (axis.length<2? (VW-PL-PR)/2 : (i/(axis.length-1))*(VW-PL-PR));
   const Y=(v)=> PT + (1-(v-lo)/(hi-lo))*(H-PT-PB);
+  /* a date's place on the x axis, between the two checkpoints it falls between; null when it is off the chart */
+  const XD=(ds)=>{ const d=String(ds||'').slice(0,10); if(!d || !axis.length || d<String(axis[0].date) || d>String(axis[axis.length-1].date)) return null;
+    for(let i=0;i<axis.length-1;i++){ const a=String(axis[i].date), b=String(axis[i+1].date); if(d>=a && d<=b){ const ta=+new Date(a+'T00:00:00'), tb=+new Date(b+'T00:00:00'), td=+new Date(d+'T00:00:00'); return X(i)+(tb>ta? (td-ta)/(tb-ta) : 0)*(X(i+1)-X(i)); } }
+    return X(axis.length-1); };
   const ticks=wbrNiceTicks(lo,hi,4);
   const labelAt=[0, Math.floor((axis.length-1)/2), axis.length-1].filter((v,i,a)=>a.indexOf(v)===i && v>=0);
   return React.createElement('svg',{className:'wbr-svg',viewBox:'0 0 '+VW+' '+H,role:'img'},
@@ -8341,6 +8390,12 @@ function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis}){
     showAxis!==false && ticks.map((t,i)=>React.createElement('text',{key:'t'+i,x:PL-7,y:Y(t)+3.5,className:'wbr-ax r'},wbrFmtV(t,fmt))),
     labelAt.map(i=>React.createElement('text',{key:'x'+i,x:X(i),y:H-7,
       className:'wbr-ax'+(i===0?' s':i===axis.length-1?' e':'')},wbrDayLabel(axis[i].date))),
+    /* project marks: a hairline on the day a project started or finished, with a small head on the top edge */
+    (marks||[]).map((mk,i)=>{ const x=XD(mk.date); if(x==null) return null; const end=mk.kind!=='start';
+      return React.createElement('g',{key:'mk'+i,className:'wbr-mark '+(end?(mk.kind==='stopped'?'stopped':'end'):'start')},
+        React.createElement('line',{x1:x,x2:x,y1:PT+3,y2:H-PB}),
+        end? React.createElement('rect',{x:x-3.6,y:PT-4.4,width:7.2,height:7.2,rx:1.4}) : React.createElement('circle',{cx:x,cy:PT-0.8,r:3.9}),
+        React.createElement('title',null, mk.label)); }),
     (lines||[]).map((l,li)=>React.createElement('path',{key:'l'+li,d:wbrPath(l.vals,X,Y),
       className:l.dashed?'wbr-goalline':'wbr-line', style:l.stroke?{stroke:l.stroke}:null})),
     (lines||[]).map((l,li)=> !l.dots? null : (l.vals||[]).map((v,i)=> v==null? null :
@@ -10616,7 +10671,7 @@ function useHc(){
   /* Every roster change writes to the activity log so there is one record of what
      changed. Only the fields anyone with the Activity tab may see are diffed - OTE,
      rating, attrition and notes stay out, whatever the action. */
-  const HC_LOG_FIELDS={name:'name',title:'title',role:'role',level:'level',manager:'manager',leaderId:'org',email:'email',startDate:'start date',country:'country',onLeave:'on leave',status:'status'};
+  const HC_LOG_FIELDS={name:'name',title:'title',role:'role',level:'level',manager:'manager',leaderId:'org',email:'email',startDate:'start date',roleSince:'in role since',country:'country',onLeave:'on leave',status:'status'};
   const hcLog=(action, emp, changes, nameOverride)=>{
     const em=String((store.user&&store.user.email)||'').toLowerCase();
     const actor=(st.hc_employees||[]).find(x=>x.email&&String(x.email).toLowerCase()===em);
@@ -10675,6 +10730,8 @@ function useHc(){
       hcLog('deleted',emp,[]); store.deleteEntity('hc_employees', emp.id);
     },
     moveEmp:(prev,next,kind,{effectiveDate,note})=>{
+      /* a change of title is a change of role: the day it took effect is when they started in it */
+      if(String(prev.title||'')!==String(next.title||'')) next=Object.assign({},next,{roleSince:effectiveDate||nowISO().slice(0,10)});
       store.writeEntity('hc_employees', next); hcLog('updated',next,[{k:kind,from:'',to:'effective '+(effectiveDate||nowISO().slice(0,10))}].concat(hcDiff(prev,next)));
       writeHistory({id:uid('hh'), empId:prev.id, type:kind, ts:nowISO(), effectiveDate:effectiveDate||nowISO().slice(0,10), note:note||'',
         fromRole:prev.role||'', toRole:next.role||'', fromTitle:prev.title||'', toTitle:next.title||'',
@@ -11364,10 +11421,44 @@ const HR_MEASURES=[
   {key:'open_reqs', label:'Open requisitions', span:'now', fmt:'num', dir:'down', def:'Requisitions open now. Not available for past dates.', f:s=>s.openReqs, nowOnly:true},
   {key:'promotions_t12', label:'Promotion rate (trailing 12 months)', span:'t12', fmt:'pct', dir:'up', def:'Promotions in the last 365 days divided by average headcount.', f:s=>s.promotionRate},
 ];
+/* A HEAD COUNT OF PEOPLE MATCHING A FILTER - how "ramped AEs" and "unramped AEs" are counted.
+   The filter lives on the metric (metric.people): title = words any of which the title must contain (comma
+   separated), org, and a tenure rule: tenOp 'gt' = more than tenMonths months, 'lte' = tenMonths months or
+   less - measured from the day they took the role they hold (tenFrom 'role', the default: a rep promoted into
+   the seat last month is new to it however long they have been at the company) or from their start date
+   (tenFrom 'start'). The title matched is the one they held on the day, not the one they hold now. Months are calendar months, so "more than 3 months" for someone who started
+   on Aug 10 begins on Nov 11. It is counted as of the checkpoint's own date, so a person moves from unramped to
+   ramped on the day they cross the line, and past checkpoints keep the count that was true then. */
+HR_MEASURES.push({key:'count', label:'People matching a filter', span:'now', fmt:'num', dir:'up', custom:true, def:'People employed on the day who match the title, org and tenure rule set on this metric.', f:()=>null});
+const hrAddMonths=(d,n)=>new Date(d.getFullYear(),d.getMonth()+n,d.getDate());
+/* THE ROLE SOMEBODY HELD ON A GIVEN DAY, AND SINCE WHEN.
+   Every recorded promotion or transfer keeps the title before and after and its effective date (hc_history),
+   so the role on any past day is READ from that trail: the title is the one in force on the day, and "since"
+   is the date of the change that put them in it - their start date when there was none.
+   A record can also carry roleSince, for a role that began before Cirri was told about it (a promotion that
+   happened last year). Recording a promotion stamps it; it can be corrected on the record. It describes the
+   CURRENT role, so on a day before it the person was in some earlier role we know nothing about: no title. */
+function hrRoleIndex(history){ const by={}; (history||[]).forEach(h=>{ if(h && h.empId && String(h.fromTitle||'')!==String(h.toTitle||'') && hrD(h.effectiveDate)){ (by[h.empId]=by[h.empId]||[]).push(h); } }); Object.keys(by).forEach(k=>by[k].sort((a,b)=>String(a.effectiveDate).localeCompare(String(b.effectiveDate)))); return by; }
+function hrRoleAt(e, idx, day){ const ch=(idx&&idx[e.id])||[]; const start=hrD(e.startDate); const past=ch.filter(h=>hrD(h.effectiveDate)<=day), fut=ch.filter(h=>hrD(h.effectiveDate)>day);
+  if(fut.length) return {title:String(fut[0].fromTitle||''), since: past.length? hrD(past[past.length-1].effectiveDate) : start};
+  const lastCh=past.length? hrD(past[past.length-1].effectiveDate) : null; const manual=hrD(e.roleSince);
+  const since=(manual && (!lastCh || manual>=lastCh))? manual : (lastCh||start);
+  if(since && since>day) return {title:'', since:null};
+  return {title:String(e.title||e.role||''), since}; }
+function hrRoleSinceNow(e, history){ const r=hrRoleAt(e, hrRoleIndex((history||[]).filter(h=>h&&h.empId===e.id)), hrD(todayStr())||new Date()); return r.since? hrISO(r.since) : ''; }
+function hrMatch(emps, f, day, history){ f=f||{}; const terms=String(f.title||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean); const n=Number(f.tenMonths); const op=f.tenOp||'';
+  const idx=hrRoleIndex(history); const fromStart=f.tenFrom==='start';
+  return hrPool(emps, f.org||'').filter(e=>{ if(!hrOn(e,day)) return false; const role=hrRoleAt(e,idx,day);
+    if(terms.length){ const t=role.title.toLowerCase(); if(!t || !terms.some(x=>t.indexOf(x)>=0)) return false; }
+    if(op && isFinite(n) && String(f.tenMonths)!==''){ const st=fromStart? hrD(e.startDate) : role.since; if(!st) return false; const past=day>hrAddMonths(st,n); if(op==='gt'? !past : past) return false; }
+    return true; }); }
+function hrFilterText(f){ f=f||{}; const t=String(f.title||'').trim(); const n=String(f.tenMonths==null?'':f.tenMonths).trim(); const where=f.tenFrom==='start'? ' at the company' : ' in the role'; const ten=(f.tenOp&&n!=='')? (f.tenOp==='gt'? 'more than '+n+' month'+(n==='1'?'':'s')+where : n+' month'+(n==='1'?'':'s')+' or less'+where) : '';
+  return (t? 'title contains "'+t+'"' : 'everyone')+(ten? ', '+ten : ''); }
 const HR_MEASURE={}; HR_MEASURES.forEach(m=>{ HR_MEASURE[m.key]=m; });
 /* a measure's value as of a day (a Business Review checkpoint). A day in the future has no value. */
 function hrMeasureValue(key, emps, history, opt){
   const M=HR_MEASURE[key]; const day=hrD(opt.asOf); if(!M||!day) return null; const today=hrD(todayStr())||new Date(); if(day>today) return null;
+  if(key==='count') return hrMatch(emps, Object.assign({org:opt.orgId||''}, opt.filter||{}), day, history).length;
   if(M.nowOnly && hrISO(day).slice(0,7)!==hrISO(today).slice(0,7)) return null;
   const from= M.span==='month'? new Date(day.getFullYear(),day.getMonth(),1) : M.span==='t12'? hrAdd(day,-364) : day;
   const v=M.f(hrStats(emps, history, {from, to:day, orgId:opt.orgId||''})); return (v==null||!isFinite(v))? null : Math.round(v*100)/100; }
@@ -11656,7 +11747,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
   const build=()=>Object.assign({}, emp||{}, {
     id:isNew?uid('e'):f.id, leaderId:f.leaderId||leaderId,
     name:(f.name||'').trim(), title:(f.title||'').trim(), base:hcNum(f.base), variable:hcNum(f.variable), bonus:hcNum(f.bonus), ote:(hcHasParts(f)? hcOteFromParts(f) : (parseFloat(f.ote)||null)), currency:f.currency||WSR.currency||'USD', country:f.country||'USA', role:f.role||'',
-    level:parseInt(f.level)||1, manager:f.manager||'', managerId:f.managerId||'', teamTags:[...(f.teamTags||[])], startDate:f.startDate||'',
+    level:parseInt(f.level)||1, roleSince:f.roleSince||'', manager:f.manager||'', managerId:f.managerId||'', teamTags:[...(f.teamTags||[])], startDate:f.startDate||'',
     performance:f.performance||'Good', attrition:f.attrition||'', onLeave:!!f.onLeave, notes:f.notes||'',
     status:isHire?'active':((emp&&emp.status)||'active'),
     email:(f.email||'').trim().toLowerCase(), slackId:(f.slackId||'').trim(),
@@ -11738,7 +11829,7 @@ function HcEmpModal({leaderId,emp,onClose,mode}){
     React.createElement('div',{className:'f-row'}, field('Work email',inp('email','email','name@company.com'),'The one they sign in with. It is how the app knows who they are, and how Slack finds them for direct messages.'),
       field('Slack member ID',inp('slackId','text','U01ABC23DEF'),'Only needed if their Slack account uses a different email than the one above. In Slack: open their profile, the three-dot menu, Copy member ID.')),
     React.createElement('div',{className:'f-row'},
-      field('Level',React.createElement('select',{className:'inp',value:f.level||1,onChange:e=>set('level',parseInt(e.target.value,10)||1)}, HCR.levels.map(l=>React.createElement('option',{key:l.n,value:l.n},l.name)))), field('Start date',inp('startDate','date')),
+      field('Level',React.createElement('select',{className:'inp',value:f.level||1,onChange:e=>set('level',parseInt(e.target.value,10)||1)}, HCR.levels.map(l=>React.createElement('option',{key:l.n,value:l.n},l.name)))), field('Start date',inp('startDate','date')), field('In role since',inp('roleSince','date'),'The day they took the role they hold now. Recording a promotion sets it. Leave empty if they have held this role since they started. People reporting measures time in role from it.'),
       React.createElement(HcManagerPick,{value:f.managerId||f.manager,selfId:emp?emp.id:'',onChange:v=>{ set('manager',v.name); set('managerId',v.id); },employees:H.employees})),
     (!isNew)&&field('Org / team', React.createElement('select',{className:'inp',value:f.leaderId,onChange:e=>set('leaderId',e.target.value)}, leaders.map(l=>React.createElement('option',{key:l.id,value:l.id},l.label)))),
     orgChanged&&React.createElement('div',{className:'tiny',style:{color:'var(--deep)',marginTop:-6,marginBottom:10,fontWeight:600}},'Moving from '+((leaders.find(l=>l.id===emp.leaderId)||{}).label||emp.leaderId)+' to '+((leaders.find(l=>l.id===f.leaderId)||{}).label||f.leaderId)),
@@ -11770,7 +11861,7 @@ function HcReqModal({leaderId,onClose}){
   const set=(k,v)=>setF(s=>Object.assign({},s,{[k]:v}));
   const add=()=>{ if(sel&&!rtags.includes(sel)&&rtags.length<3) setRtags([...rtags,sel]); };
   const canSave=!!(f.title||'').trim();
-  const save=()=>{ if(!canSave)return; H.createReq({ title:f.title.trim(), role:(f.role||f.title).trim(), level:parseInt(f.level)||1, manager:f.manager||'', managerId:f.managerId||'', leaderId:f.leaderId||leaderId, teamTags:[...rtags], targetOte:parseFloat(f.targetOte)||null, openReason:f.openReason||'', t1:rtags[0]||'' }); onClose(); };
+  const save=()=>{ if(!canSave)return; H.createReq({ title:f.title.trim(), role:(f.role||f.title).trim(), level:parseInt(f.level)||1, roleSince:f.roleSince||'', manager:f.manager||'', managerId:f.managerId||'', leaderId:f.leaderId||leaderId, teamTags:[...rtags], targetOte:parseFloat(f.targetOte)||null, openReason:f.openReason||'', t1:rtags[0]||'' }); onClose(); };
   const field=(label,node)=>React.createElement('div',{className:'field'},React.createElement('label',null,label),node);
   return React.createElement(HcModalShell,{title:'Open a requisition \u00b7 Req #'+H.nextReq,onClose,
     footer:[React.createElement('button',{key:1,className:'btn',onClick:onClose},'Cancel'),React.createElement('button',{key:2,className:'btn primary',disabled:!canSave,onClick:save},'Open req #'+H.nextReq)]},
@@ -11936,6 +12027,7 @@ function HcEmployeeDrawer({empId,onClose}){
         React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'Level'),React.createElement('div',{style:{fontWeight:600,fontSize:13}},hcLevelName(emp.level))),
         React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'Manager'),React.createElement('div',{style:{fontWeight:600,fontSize:13}},emp.manager||'\u2014')),
         React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'Tenure'),React.createElement('div',{style:{fontWeight:600,fontSize:13}},hcTenureLbl(mo))),
+        (function(){ const rs=hrRoleSinceNow(emp,H.history||[]); if(!rs || rs===String(emp.startDate||'').slice(0,10)) return null; return React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'In this role'),React.createElement('div',{style:{fontWeight:600,fontSize:13},title:'Since '+fmtDate(rs)},hcTenureLbl(hcTenureMo(rs)),React.createElement('span',{className:'muted',style:{fontWeight:500,marginLeft:6,fontSize:12}},'since '+fmtDateShort(rs)))); })(),
         React.createElement('div',null,React.createElement('div',{className:'tiny muted'},'Performance'),
           seesComp?React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:7,flexWrap:'wrap'}},
             React.createElement('span',{className:'pill-s '+perfPillCls(emp.performance)},emp.performance||'\u2014'),
@@ -12197,7 +12289,7 @@ function HcModalHost({modal,onClose,onOpen}){
 const CU_FMT={num:'num',number:'num',count:'num',cur:'cur',currency:'cur',money:'cur',pct:'pct',percent:'pct',days:'days',day:'days',hrs:'hrs',hours:'hrs',sec:'sec',seconds:'sec',mo:'mo',months:'mo',score:'score',ratio:'ratio'};
 const CU_DIR={up:'up',higher:'up',down:'down',lower:'down',target:'target'};
 const CU_AGG={cum:'cum',cumulative:'cum',sum:'cum',snap:'snap',rate:'snap',average:'snap',snapshot:'snap',level:'snap'};
-const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','base','variable','bonus','ote','onLeave','status','exitDate','attritionType','exitReason','regretted','slackId','teamTags','cost'];
+const CU_PEOPLE_KEYS=['email','employeeId','name','title','role','level','manager','org','startDate','country','currency','base','variable','bonus','ote','onLeave','roleSince','status','exitDate','attritionType','exitReason','regretted','slackId','teamTags','cost'];
 function cuLc(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function cuHas(o,k){ return o && Object.prototype.hasOwnProperty.call(o,k) && o[k]!==undefined; }
 function cuSame(a,b){ return JSON.stringify(a==null?'':a)===JSON.stringify(b==null?'':b); }
@@ -12272,6 +12364,7 @@ function cuPlan(file, ctx){
     ['name','title','role','country','slackId','exitReason','attritionType'].forEach(k=>{ if(cuHas(row,k)) patch[k]=String(row[k]==null?'':row[k]).trim(); });
     if(cuHas(row,'currency')) patch.currency=String(row.currency||'').trim().toUpperCase()||ctx.currency||'USD';
     if(cuHas(row,'startDate')){ const d=cuIsoDate(row.startDate); if(d||!row.startDate) patch.startDate=d; else R.warnings.push(w+': startDate "'+row.startDate+'" is not YYYY-MM-DD; left as it was.'); }
+    if(cuHas(row,'roleSince')){ const d=cuIsoDate(row.roleSince); if(d||!row.roleSince) patch.roleSince=d; else R.warnings.push(w+': roleSince "'+row.roleSince+'" is not YYYY-MM-DD; left as it was'); }
     if(cuHas(row,'exitDate')){ const d=cuIsoDate(row.exitDate); if(d) patch.exitDate=d; }
     if(cuHas(row,'level')){ const n=levelOf(row.level); if(n!=null) patch.level=n; else R.warnings.push(w+': level "'+row.level+'" is not on the ladder in Settings > People; level left as it was.'); }
     if(cuHas(row,'org')){ const id=orgRef(row.org); if(id){ patch.leaderId=id; } else R.warnings.push(w+': org "'+row.org+'" does not exist and is not in the file\u2019s orgs; org left as it was.'); }
@@ -12459,7 +12552,7 @@ function cuTemplate(st, emps, leaders, S){
 
 /* The weekly update card on Settings > General > Data, and its preview. */
 function cuFmtPay(v){ return v==null||v===''? 'none' : fmtMoney(Number(v)); }
-const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',country:'country',currency:'paid in',ote:'OTE',base:'base',variable:'variable',bonus:'bonus',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',regretted:'regretted loss',slackId:'Slack id',teamTags:'tags',
+const CU_FIELD_LBL={email:'email',extId:'employee id',name:'name',title:'title',role:'role',level:'level',managerId:'manager',leaderId:'org',startDate:'start date',roleSince:'in role since',country:'country',currency:'paid in',ote:'OTE',base:'base',variable:'variable',bonus:'bonus',onLeave:'on leave',status:'status',exitDate:'exit date',attritionType:'attrition type',exitReason:'exit reason',regretted:'regretted loss',slackId:'Slack id',teamTags:'tags',
   c1:'cost line 1',w1:'cost line 1 %',t1:'cost line 1 tag',ch1:'cost line 1 channel',c2:'cost line 2',w2:'cost line 2 %',t2:'cost line 2 tag',ch2:'cost line 2 channel',c3:'cost line 3',w3:'cost line 3 %',t3:'cost line 3 tag',ch3:'cost line 3 channel',
   sec:'section',def:'definition',fmt:'unit',cad:'window',agg:'aggregation',dir:'direction',band:'tolerance',goalDefault:'standing goal',ownerId:'owner',hideWbr:'hidden from review',hidePlan:'hidden from plan'};
 function CuList({items, render, cap}){
