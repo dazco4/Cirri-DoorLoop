@@ -1130,10 +1130,37 @@ input.inp.perm-until{width:150px;flex:0 0 auto;padding:4px 8px;font-size:12.5px}
 .sct-mark{display:flex;align-items:center;gap:7px;min-width:0;font-size:12px;color:var(--ink);cursor:pointer}
 .sct-mark:hover .sct-mark-n{text-decoration:underline}
 .sct-mk{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:inset 0 0 0 1px var(--gold-deep)}
-.sct-mk.end{border-radius:2px;background:var(--deep)}
+.sct-mk.end{border-radius:2px;background:var(--deep);box-shadow:none}
 .sct-mk.stopped{border-radius:2px;background:#fff;box-shadow:inset 0 0 0 1.4px var(--muted-2)}
 .sct-mark-n{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .sct-mark-d{flex:0 0 auto;color:var(--ink-2);white-space:nowrap}
+.sc-m{cursor:zoom-in}
+.wbr-ptl{font-size:10.5px;font-weight:700;fill:var(--ink);text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.wbr-ptl.s{text-anchor:start}
+.wbr-ptl.e{text-anchor:end}
+.sct-zoom{position:relative;cursor:zoom-in;border-radius:8px}
+.sct-zoom-h{position:absolute;right:4px;top:2px;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--ink-2);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:20px;padding:1px 7px;opacity:0;transition:opacity .12s;white-space:nowrap}
+.sct-zoom:hover .sct-zoom-h{opacity:1}
+.scx{min-width:0}
+.scx-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.scx-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.scx-own{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scx-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.scx-stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2);min-width:0}
+.scx-big{font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.25;margin:2px 0;overflow-wrap:anywhere}
+.scx-chart{border:1px solid var(--line);border-radius:12px;padding:10px 8px 4px;background:var(--panel)}
+.scx-chart .wbr-svg{width:100%;height:auto;display:block}
+.scx-key{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 2px 0;font-size:12px;color:var(--ink-2)}
+.scx-key span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.scx-k{display:inline-block;width:18px;height:0;border-top:2px solid var(--deep)}
+.scx-k.dash{border-top:2px dashed var(--muted-2)}
+.scx-sec{margin-top:16px}
+.scx-sec .klabel{display:block;margin-bottom:7px}
+.scx-marks{display:flex;flex-direction:column;gap:5px}
+.scx-tablewrap{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.scx-table{margin:0}
+.scx-table thead th{position:sticky;top:0;background:var(--panel-2);z-index:1}
+.scx-note{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -1199,7 +1226,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-23-1343';
+const BUILD='2026-11-23-1355';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -2959,10 +2986,10 @@ function DueTag({date,status}){
   let suffix=''; if(!isClosedStatus(status)){ if(over) suffix=' ('+Math.abs(n)+'d late)'; else if(n===0) suffix=' (today)'; else if(soon) suffix=' ('+n+'d)'; }
   return React.createElement('span',{className:cls}, fmtDateShort(date)+suffix);
 }
-function Modal({title, onClose, children, footer, wide}){
+function Modal({title, onClose, children, footer, wide, width}){
   useEffect(()=>{ const h=(e)=>{ if(e.key==='Escape') onClose(); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[onClose]);
   return React.createElement('div',{className:'scrim',onMouseDown:(e)=>{if(e.target===e.currentTarget)onClose();}},
-    React.createElement('div',{className:'modal',style:wide?{width:'min(720px,94vw)'}:null},
+    React.createElement('div',{className:'modal',style:width?{width}:(wide?{width:'min(720px,94vw)'}:null)},
       React.createElement('div',{className:'mh'}, React.createElement('h3',null,title), React.createElement('button',{className:'x',onClick:onClose},'\u00d7')),
       React.createElement('div',{className:'mb'}, children),
       footer && React.createElement('div',{className:'mf'}, footer)
@@ -3264,17 +3291,81 @@ function ScSpark({pts}){
 }
 /* the value beside a tracked criterion: sparkline, latest reading, on/off plan dot. Opens the metric. */
 function ScMetricBadge({c}){
-  const W=useWbr(); const nav=useNav();
+  const W=useWbr(); const nav=useNav(); const [big,setBig]=useState(false);
   const m=scMetricOf(c,W);
   const tr=useMemo(()=>m? scTrend(W,m,14) : null,[m,W.timeline,W.resolver,W.periods]);
   if(!m) return null;
   const last=tr&&tr.last;
   const tip=m.name+(scHasGoal(c)? ' \u00b7 target '+scGoalText(c)+(last? (scMet(c,last.pace)? ' \u00b7 reached' : ' \u00b7 not there yet') : '') : '')+(last? ' \u00b7 as of '+fmtDateShort(last.date)+(!scHasGoal(c)&&last.goal!=null?' \u00b7 Business Review goal '+wbrFmtV(last.goal,m.fmt):'') : ' \u00b7 no readings yet - open the metric to add one');
-  return React.createElement('span',{className:'sc-m','data-tip':tip,onClick:(e)=>{ e.stopPropagation(); nav.openMetric(m.id); }},
+  return React.createElement('span',{className:'sc-m','data-tip':tip+' \u00b7 click for the full chart',onClick:(e)=>{ e.stopPropagation(); setBig(true); }},
+    big? ReactDOM.createPortal(React.createElement('span',{onClick:e=>e.stopPropagation()},React.createElement(ScChartModal,{c,onClose:()=>setBig(false)})), document.body) : null,
     React.createElement(ScSpark,{pts:tr?tr.pts:[]}),
     React.createElement('span',{className:'sc-mv'}, last? wbrFmtV(last.pace,m.fmt) : '\u2014'),
     scHasGoal(c)? (last? React.createElement('span',{className:'stg '+(scMet(c,last.pace)?'st-done':'st-not_started')}) : null)
       : (last&&last.pct!=null? React.createElement(WbrDot,{tone:last.tone}) : null));
+}
+/* THE LARGE CHART FOR ONE SUCCESS CRITERION. Opened by clicking the small chart on a criterion row or in the
+   objective's Trend section. Same numbers as the small one (scTrend), drawn big: a labelled value axis, more
+   dates along the bottom, the value on each point, the target as a dashed line, project starts and finishes,
+   and the readings in a table underneath. The Business Review is one click away for the metric itself. */
+function ScChartModal({c, okr, onClose}){
+  const W=useWbr(); const nav=useNav(); const g=useGtm();
+  const [range,setRange]=useState(26);
+  const m=scMetricOf(c,W);
+  const own=okr || (g.okrs||[]).find(o=>(o.successCriteria||[]).some(x=>x&&x.id===c.id)) || null;
+  const tr=useMemo(()=>m? scTrend(W,m,range||0) : {pts:[],last:null},[m,range,W.timeline,W.resolver,W.periods]);
+  if(!m) return null;
+  const pts=tr.pts, last=tr.last, hasGoal=scHasGoal(c);
+  const marks=own? scProjectMarks(own,c,g.projects) : [];
+  const lo=pts.length? String(pts[0].date):'', hi=pts.length? String(pts[pts.length-1].date):'';
+  const onChart=lo? marks.filter(k=>k.date>=lo&&k.date<=hi) : marks, off=marks.length-onChart.length;
+  const vals=pts.filter(p=>p.pace!=null); const first=vals.length? vals[0] : null;
+  const delta=(first&&last&&vals.length>1)? last.pace-first.pace : null;
+  const better=delta==null||delta===0? null : (m.dir==='down'? delta<0 : m.dir==='target'? null : delta>0);
+  const P=scParts(c);
+  const rows=vals.slice().reverse();
+  return React.createElement(Modal,{title:P.name, onClose, width:'min(980px,96vw)',
+    footer:[React.createElement('button',{key:'b',className:'btn',onClick:()=>{ onClose(); nav.openMetric(m.id); }},iLabel('trending-up','Open in the Business Review',13)),
+            React.createElement('button',{key:'c',className:'btn primary',onClick:onClose},'Done')]},
+    React.createElement('div',{className:'scx'},
+      React.createElement('div',{className:'scx-head'},
+        React.createElement('div',{className:'scx-tags'},
+          P.sec? React.createElement('span',{className:'sc-sec',style:{marginLeft:0}},P.sec) : null,
+          React.createElement(WbrCad,{cad:m.cad}),
+          own? React.createElement('span',{className:'tiny muted scx-own',title:own.theme},'O'+own.num+' '+own.theme) : null),
+        React.createElement('div',{className:'seg sm'}, [[13,'3 months'],[26,'6 months'],[52,'1 year'],[0,'All']].map(o=>React.createElement('button',{key:o[0],className:range===o[0]?'on':'',onClick:()=>setRange(o[0])},o[1])))),
+      React.createElement('div',{className:'scx-stats'},
+        React.createElement('div',{className:'scx-stat'}, React.createElement('div',{className:'klabel'},'Latest'), React.createElement('div',{className:'scx-big'}, last? wbrFmtV(last.pace,m.fmt) : '\u2014'), React.createElement('div',{className:'tiny muted'}, last? 'as of '+fmtDate(last.date) : 'No readings yet')),
+        React.createElement('div',{className:'scx-stat'}, React.createElement('div',{className:'klabel'},hasGoal?'Target':'Business Review goal'),
+          React.createElement('div',{className:'scx-big'}, hasGoal? scGoalText(c) : (last&&last.goal!=null? wbrFmtV(last.goal,m.fmt) : '\u2014')),
+          React.createElement('div',{className:'tiny muted',style:{display:'flex',alignItems:'center',gap:6}}, hasGoal&&last? React.createElement('span',{className:'stg '+(scMet(c,last.pace)?'st-done':'st-not_started')}) : null,
+            hasGoal? (last? (scMet(c,last.pace)? 'Reached' : 'Not there yet') : 'Waiting for a reading') : (last&&last.pct!=null? wbrTrim(last.pct,1)+'% to plan' : 'No goal set'))),
+        React.createElement('div',{className:'scx-stat'}, React.createElement('div',{className:'klabel'},'Change over this period'),
+          React.createElement('div',{className:'scx-big'}, delta==null? '\u2014' : (delta>0?'+':delta<0?'\u2212':'')+wbrFmtV(Math.abs(delta),m.fmt)),
+          React.createElement('div',{className:'tiny muted'}, first&&delta!=null? ('from '+wbrFmtV(first.pace,m.fmt)+' on '+fmtDateShort(first.date)+(better===true?' \u00b7 improving':better===false?' \u00b7 getting worse':'')) : 'Needs two readings'))),
+      pts.length? React.createElement('div',{className:'scx-chart'},
+          React.createElement(WbrChart,{axis:pts, fmt:m.fmt, baseZero:m.agg==='cum', height:340, vw:860, xLabels:7, pointLabels:true, marks,
+            lines:[{vals:pts.map(p=>hasGoal? Number(c.goal) : p.goal), dashed:true},{vals:pts.map(p=>p.pace), dots:true, notes:pts.map(p=>p.note), pcts:pts.map(p=>p.pct), lastTone:(last&&last.tone)||'none'}]}))
+        : React.createElement('div',{className:'wbr-nochart',style:{padding:'46px 0'}},'No readings yet. Add the first one in the Business Review and the line starts here.'),
+      React.createElement('div',{className:'scx-key'},
+        React.createElement('span',null,React.createElement('i',{className:'scx-k line'}), m.agg==='cum'? 'Actual, at its pace for the period' : 'Actual'),
+        React.createElement('span',null,React.createElement('i',{className:'scx-k dash'}), hasGoal? 'Target' : 'Business Review goal'),
+        marks.length? React.createElement('span',null,React.createElement('i',{className:'sct-mk start'}),'Project started') : null,
+        marks.some(k=>k.kind==='end')? React.createElement('span',null,React.createElement('i',{className:'sct-mk end'}),'Project finished') : null),
+      marks.length? React.createElement('div',{className:'scx-sec'},
+        React.createElement('div',{className:'klabel'},'Projects serving this criterion'),
+        React.createElement('div',{className:'scx-marks'}, onChart.map((k,i)=>React.createElement('span',{key:i,className:'sct-mark',title:k.label.replace('\n',' \u00b7 '),onClick:()=>{ onClose(); nav.openProject(k.pid); }},
+            React.createElement('span',{className:'sct-mk '+k.kind}), React.createElement('span',{className:'sct-mark-n'},k.name), React.createElement('span',{className:'sct-mark-d'},(k.kind==='start'?'started ':k.kind==='end'?'finished ':'abandoned ')+fmtDate(k.date)))),
+          off? React.createElement('span',{className:'tiny muted'}, off+' project date'+(off===1?'':'s')+' outside this period - widen the range to see '+(off===1?'it':'them')) : null)) : null,
+      rows.length? React.createElement('div',{className:'scx-sec'},
+        React.createElement('div',{className:'klabel'},'Readings'),
+        React.createElement('div',{className:'scx-tablewrap'}, React.createElement('table',{className:'tbl scx-table'},
+          React.createElement('thead',null,React.createElement('tr',null,React.createElement('th',null,'Checkpoint'),React.createElement('th',{style:{textAlign:'right'}},'Value'),React.createElement('th',{style:{textAlign:'right'}},hasGoal?'Against target':'To plan'),React.createElement('th',null,'Note'))),
+          React.createElement('tbody',null, rows.map((p,i)=>React.createElement('tr',{key:i},
+            React.createElement('td',{style:{whiteSpace:'nowrap'}},fmtDate(p.date),React.createElement('span',{className:'muted',style:{marginLeft:8,fontSize:11.5}},p.label)),
+            React.createElement('td',{className:'r',style:{fontVariantNumeric:'tabular-nums',fontWeight:700,whiteSpace:'nowrap'}},wbrFmtV(p.pace,m.fmt)),
+            React.createElement('td',{className:'r',style:{whiteSpace:'nowrap'}}, hasGoal? React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:6}},React.createElement('span',{className:'stg '+(scMet(c,p.pace)?'st-done':'st-not_started')}), scMet(c,p.pace)?'Reached':'Not yet') : (p.pct!=null? wbrTrim(p.pct,1)+'%' : '\u2014')),
+            React.createElement('td',{className:'scx-note',title:p.note||''},p.note||''))))))) : null));
 }
 function ScLine({c, ps}){
   const driving=ps.filter(p=>(p.scIds||[]).includes(c.id));
@@ -3297,12 +3388,13 @@ function scProjectMarks(okr, c, projects){
     if(isClosedStatus(p.status) && p.doneAt){ const d=String(p.doneAt).slice(0,10); const n=projDaysRunning(p); out.push({date:d, kind:p.status==='abandoned'?'stopped':'end', pid:p.id, name:p.name, label:(p.status==='abandoned'?'Abandoned: ':'Finished: ')+p.name+'\n'+fmtDate(d)+(n!=null?' \u00b7 took '+n+' day'+(n===1?'':'s'):'')}); } });
   return out.sort((a,b)=>String(a.date).localeCompare(String(b.date))); }
 function OkrTrends({okr}){
-  const W=useWbr(); const nav=useNav(); const {projects}=useGtm();
+  const W=useWbr(); const nav=useNav(); const {projects}=useGtm(); const [bigC,setBigC]=useState(null);
   const rows=useMemo(()=>(okr.successCriteria||[]).map(c=>{ const m=scMetricOf(c,W); return m? {c,m,tr:scTrend(W,m,26)} : null; }).filter(Boolean),[okr.successCriteria,W.metricMap,W.timeline,W.resolver,W.periods]);
   if(!rows.length) return null;
   return React.createElement('div',{style:{marginBottom:18}},
     React.createElement('div',{className:'section-title'},'Trend',
       React.createElement('span',{className:'fhint','data-tip':'Each tracked success criterion over time, read from the Business Review. A month-to-date total is drawn at its pace. Dashed line is the target. A gold dot marks the day a project serving this criterion started; a navy square the day it finished.'},React.createElement(Icon,{name:'info',size:13}))),
+    bigC? React.createElement(ScChartModal,{c:bigC,okr,onClose:()=>setBigC(null)}) : null,
     React.createElement('div',{className:'sct-grid'}, rows.map(({c,m,tr})=>React.createElement('div',{key:c.id,className:'wbr-card sct-card'},
       React.createElement('div',{className:'sct-crit',title:scText(c)}, scParts(c).name, scParts(c).sec? React.createElement('span',{className:'sc-sec'},scParts(c).sec) : null),
       React.createElement('div',{className:'sct-sub'},
@@ -3313,8 +3405,10 @@ function OkrTrends({okr}){
         tr.last? React.createElement('span',{className:'tiny muted',style:{whiteSpace:'nowrap'}},'as of '+fmtDateShort(tr.last.date)) : null,
         scHasGoal(c)? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}}, tr.last? React.createElement('span',{className:'stg '+(scMet(c,tr.last.pace)?'st-done':'st-not_started'),style:{marginRight:6}}) : null, scGoalText(c))
         : (tr.last&&tr.last.pct!=null? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}},React.createElement(WbrDot,{tone:tr.last.tone}), wbrTrim(tr.last.pct,1)+'% to plan'):null)),
-      tr.pts.length? React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380, marks:scProjectMarks(okr,c,projects),
-          lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]})
+      tr.pts.length? React.createElement('div',{className:'sct-zoom',title:'Click for the full chart',onClick:()=>setBigC(c)},
+          React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380, marks:scProjectMarks(okr,c,projects),
+          lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]}),
+          React.createElement('span',{className:'sct-zoom-h'},React.createElement(Icon,{name:'arrow-up-right',size:11}),'Full chart'))
         : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.'),
       (function(){ const all=scProjectMarks(okr,c,projects); if(!all.length) return null; const lo=tr.pts.length? String(tr.pts[0].date):'', hi=tr.pts.length? String(tr.pts[tr.pts.length-1].date):'';
         const on=lo? all.filter(k=>k.date>=lo && k.date<=hi) : all, off=all.length-on.length;   /* no chart yet: list every project date, there is nothing for one to be outside of */
@@ -8368,7 +8462,7 @@ function wbrPath(vals, X, Y){
 /* One chart, one shared vertical scale, however many lines. The viewBox width is
    passed in rather than fixed so text renders at roughly the same size whether it
    is a small card or the full width chart. */
-function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks}){
+function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks, xLabels, pointLabels}){
   const H=height||190, VW=vw||460, PL=showAxis===false?6:44, PR=10, PT=12, PB=24;
   const vals=[];
   (lines||[]).forEach(l=>(l.vals||[]).forEach(v=>{ if(v!=null) vals.push(v); }));
@@ -8384,11 +8478,12 @@ function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks}){
     for(let i=0;i<axis.length-1;i++){ const a=String(axis[i].date), b=String(axis[i+1].date); if(d>=a && d<=b){ const ta=+new Date(a+'T00:00:00'), tb=+new Date(b+'T00:00:00'), td=+new Date(d+'T00:00:00'); return X(i)+(tb>ta? (td-ta)/(tb-ta) : 0)*(X(i+1)-X(i)); } }
     return X(axis.length-1); };
   const ticks=wbrNiceTicks(lo,hi,4);
-  const labelAt=[0, Math.floor((axis.length-1)/2), axis.length-1].filter((v,i,a)=>a.indexOf(v)===i && v>=0);
+  const labelAt=(xLabels&&xLabels>3&&axis.length>3)? Array.from({length:Math.min(xLabels,axis.length)},(_,k,arr)=>Math.round(k*(axis.length-1)/(Math.min(xLabels,axis.length)-1))).filter((v,i,a)=>a.indexOf(v)===i)
+    : [0, Math.floor((axis.length-1)/2), axis.length-1].filter((v,i,a)=>a.indexOf(v)===i && v>=0);
   return React.createElement('svg',{className:'wbr-svg',viewBox:'0 0 '+VW+' '+H,role:'img'},
     ticks.map((t,i)=>React.createElement('line',{key:'g'+i,x1:PL,x2:VW-PR,y1:Y(t),y2:Y(t),className:'wbr-grid'})),
     showAxis!==false && ticks.map((t,i)=>React.createElement('text',{key:'t'+i,x:PL-7,y:Y(t)+3.5,className:'wbr-ax r'},wbrFmtV(t,fmt))),
-    labelAt.map(i=>React.createElement('text',{key:'x'+i,x:X(i),y:H-7,
+    labelAt.filter((i,k,arr)=> k===0 || wbrDayLabel(axis[i].date)!==wbrDayLabel(axis[arr[k-1]].date) || k===arr.length-1).filter((i,k,arr)=> !(k===arr.length-2 && arr.length>1 && wbrDayLabel(axis[i].date)===wbrDayLabel(axis[arr[arr.length-1]].date))).map(i=>React.createElement('text',{key:'x'+i,x:X(i),y:H-7,
       className:'wbr-ax'+(i===0?' s':i===axis.length-1?' e':'')},wbrDayLabel(axis[i].date))),
     /* project marks: a hairline on the day a project started or finished, with a small head on the top edge */
     (marks||[]).map((mk,i)=>{ const x=XD(mk.date); if(x==null) return null; const end=mk.kind!=='start';
@@ -8404,6 +8499,9 @@ function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks}){
         React.createElement('title',null, axis[i].label+' \u00b7 '+wbrDayLabel(axis[i].date)+'\n'+wbrFmtV(v,fmt)
           +((l.pcts&&l.pcts[i]!=null)?'\n'+wbrTrim(l.pcts[i],1)+'% to plan':'')
           +((l.notes&&l.notes[i])?'\n\n'+l.notes[i]:''))))),
+    /* the value written above each point (large view only); thinned out when the points are crowded */
+    pointLabels? (lines||[]).map((l,li)=>{ if(!l.dots) return null; const idx=[]; (l.vals||[]).forEach((v,i)=>{ if(v!=null) idx.push(i); }); const step=Math.max(1,Math.ceil(idx.length/12));
+      return idx.map((i,k)=> (k%step!==0 && k!==idx.length-1)? null : React.createElement('text',{key:'v'+li+'-'+i,x:X(i),y:Math.max(PT+9,Y(l.vals[i])-9),className:'wbr-ptl'+(i===0?' s':i===axis.length-1?' e':'')},wbrFmtV(l.vals[i],fmt))); }) : null,
     (lines||[]).map((l,li)=>{
       if(!l.lastTone) return null;
       let idx=-1; (l.vals||[]).forEach((v,i)=>{ if(v!=null) idx=i; });
