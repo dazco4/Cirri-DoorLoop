@@ -1226,7 +1226,7 @@ window.addEventListener('appinstalled', ()=>{ window.__installed=true; window.__
 if('serviceWorker' in navigator && location.protocol==='https:' && !/localhost|127\.0\.0\.1/.test(location.hostname)){ window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 /* Local storage keys are namespaced by Firebase project, so two editions on one domain (live and demo) never share a cache. */
 const LS_NS=(typeof FIREBASE_CONFIG==='object'&&FIREBASE_CONFIG&&FIREBASE_CONFIG.projectId)? FIREBASE_CONFIG.projectId : 'local';
-const BUILD='2026-11-23-1355';
+const BUILD='2026-11-23-1404';
 const WS_DEFAULTS={
   name:'', owners:[], allowedDomain:'', idleHours:8,
   checkins:{enabled:true, stalled:true},       /* weekly check-ins on active projects; a missing one counts as stalled */
@@ -3345,7 +3345,7 @@ function ScChartModal({c, okr, onClose}){
           React.createElement('div',{className:'tiny muted'}, first&&delta!=null? ('from '+wbrFmtV(first.pace,m.fmt)+' on '+fmtDateShort(first.date)+(better===true?' \u00b7 improving':better===false?' \u00b7 getting worse':'')) : 'Needs two readings'))),
       pts.length? React.createElement('div',{className:'scx-chart'},
           React.createElement(WbrChart,{axis:pts, fmt:m.fmt, baseZero:m.agg==='cum', height:340, vw:860, xLabels:7, pointLabels:true, marks,
-            lines:[{vals:pts.map(p=>hasGoal? Number(c.goal) : p.goal), dashed:true},{vals:pts.map(p=>p.pace), dots:true, notes:pts.map(p=>p.note), pcts:pts.map(p=>p.pct), lastTone:(last&&last.tone)||'none'}]}))
+            lines:[{vals:pts.map(p=>hasGoal? Number(c.goal) : p.goal), dashed:true},{vals:pts.map(p=>p.pace), dots:true, join:true, notes:pts.map(p=>p.note), pcts:pts.map(p=>p.pct), lastTone:(last&&last.tone)||'none'}]}))
         : React.createElement('div',{className:'wbr-nochart',style:{padding:'46px 0'}},'No readings yet. Add the first one in the Business Review and the line starts here.'),
       React.createElement('div',{className:'scx-key'},
         React.createElement('span',null,React.createElement('i',{className:'scx-k line'}), m.agg==='cum'? 'Actual, at its pace for the period' : 'Actual'),
@@ -3407,7 +3407,7 @@ function OkrTrends({okr}){
         : (tr.last&&tr.last.pct!=null? React.createElement('span',{className:'wbr-pct',style:{marginLeft:'auto'}},React.createElement(WbrDot,{tone:tr.last.tone}), wbrTrim(tr.last.pct,1)+'% to plan'):null)),
       tr.pts.length? React.createElement('div',{className:'sct-zoom',title:'Click for the full chart',onClick:()=>setBigC(c)},
           React.createElement(WbrChart,{axis:tr.pts, fmt:m.fmt, baseZero:m.agg==='cum', height:150, vw:380, marks:scProjectMarks(okr,c,projects),
-          lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]}),
+          lines:[{vals:tr.pts.map(p=>scHasGoal(c)? Number(c.goal) : p.goal), dashed:true},{vals:tr.pts.map(p=>p.pace), dots:true, join:true, notes:tr.pts.map(p=>p.note), pcts:tr.pts.map(p=>p.pct), lastTone:(tr.last&&tr.last.tone)||'none'}]}),
           React.createElement('span',{className:'sct-zoom-h'},React.createElement(Icon,{name:'arrow-up-right',size:11}),'Full chart'))
         : React.createElement('div',{className:'wbr-nochart'},'No readings yet. Add the first one in the Business Review and the line starts here.'),
       (function(){ const all=scProjectMarks(okr,c,projects); if(!all.length) return null; const lo=tr.pts.length? String(tr.pts[0].date):'', hi=tr.pts.length? String(tr.pts[tr.pts.length-1].date):'';
@@ -8450,6 +8450,9 @@ function wbrNiceTicks(lo,hi,n){
   return out;
 }
 /* one line, drawn as segments so a gap in the data reads as a gap */
+/* the same line, drawn straight across checkpoints that have no reading (a metric read monthly leaves the
+   weekly checkpoints between empty). Used where the trend matters more than showing the gaps. */
+function wbrPathJoined(vals, X, Y){ const pts=[]; (vals||[]).forEach((v,i)=>{ if(v!=null) pts.push(X(i)+','+Y(v)); }); return pts.length>1? 'M'+pts.join(' L') : ''; }
 function wbrPath(vals, X, Y){
   const segs=[]; let cur=[];
   vals.forEach((v,i)=>{
@@ -8491,7 +8494,7 @@ function WbrChart({lines, axis, fmt, baseZero, height, vw, showAxis, marks, xLab
         React.createElement('line',{x1:x,x2:x,y1:PT+3,y2:H-PB}),
         end? React.createElement('rect',{x:x-3.6,y:PT-4.4,width:7.2,height:7.2,rx:1.4}) : React.createElement('circle',{cx:x,cy:PT-0.8,r:3.9}),
         React.createElement('title',null, mk.label)); }),
-    (lines||[]).map((l,li)=>React.createElement('path',{key:'l'+li,d:wbrPath(l.vals,X,Y),
+    (lines||[]).map((l,li)=>React.createElement('path',{key:'l'+li,d:l.join? wbrPathJoined(l.vals,X,Y) : wbrPath(l.vals,X,Y),
       className:l.dashed?'wbr-goalline':'wbr-line', style:l.stroke?{stroke:l.stroke}:null})),
     (lines||[]).map((l,li)=> !l.dots? null : (l.vals||[]).map((v,i)=> v==null? null :
       React.createElement('circle',{key:'p'+li+'-'+i,cx:X(i),cy:Y(v),r:(l.notes&&l.notes[i])?4.2:2.6,
